@@ -113,6 +113,34 @@ func (s *APIServer) Run() {
 	budgetDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsUpdate)).Methods("PUT")
 	budgetDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsDelete)).Methods("DELETE")
 
+	budgetDetailsPostsRouter := router.PathPrefix("/budget-details-posts").Subrouter()
+	budgetDetailsPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsGetData)).Methods("GET")
+	budgetDetailsPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsCreate)).Methods("POST")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsGetDataById)).Methods("GET")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsUpdate)).Methods("PUT")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsDelete)).Methods("DELETE")
+
+	fundRequestsRouter := router.PathPrefix("/fund-requests").Subrouter()
+	fundRequestsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestsGetData)).Methods("GET")
+	fundRequestsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestsCreate)).Methods("POST")
+	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsGetDataById)).Methods("GET")
+	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsUpdate)).Methods("PUT")
+	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsDelete)).Methods("DELETE")
+
+	fundRequestDetailsRouter := router.PathPrefix("/fund-request-details").Subrouter()
+	fundRequestDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestDetailsGetData)).Methods("GET")
+	fundRequestDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestDetailsCreate)).Methods("POST")
+	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsGetDataById)).Methods("GET")
+	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsUpdate)).Methods("PUT")
+	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsDelete)).Methods("DELETE")
+
+	budgetDetailsPostsRecommendationsRouter := router.PathPrefix("/budget-details-posts-recommendations").Subrouter()
+	budgetDetailsPostsRecommendationsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsGetData)).Methods("GET")
+	budgetDetailsPostsRecommendationsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsCreate)).Methods("POST")
+	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsGetDataById)).Methods("GET")
+	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsUpdate)).Methods("PUT")
+	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsDelete)).Methods("DELETE")
+
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	})

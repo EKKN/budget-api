@@ -57,13 +57,16 @@ func (s *APIServer) HandlerBudgetsGetDataById(w http.ResponseWriter, r *http.Req
 func validateBudgetsRequest(reqBody *Budgets) error {
 	if reqBody.Name == "" {
 		return fmt.Errorf("name must be filled")
+	} else if len(reqBody.Name) > 255 {
+		return fmt.Errorf("max length name 255")
+	} else if len(reqBody.Description) > 255 {
+		return fmt.Errorf("max length description  255")
 	} else if reqBody.Periode == "" {
 		return fmt.Errorf("periode must be filled")
 	} else if reqBody.UnitsID == 0 {
 		return fmt.Errorf("unitsID must be filled and valid")
 	}
 	return nil
-
 }
 
 func (s *APIServer) HandlerBudgetsCreate(w http.ResponseWriter, r *http.Request) (interface{}, error) {

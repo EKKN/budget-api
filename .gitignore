@@ -1,4 +1,4 @@
 *.log
 .env
 log/
-myinstruction.txt
+mynote/

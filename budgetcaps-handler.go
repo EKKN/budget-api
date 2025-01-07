@@ -55,12 +55,14 @@ func (s *APIServer) HandlerBudgetCapsGetDataById(w http.ResponseWriter, r *http.
 }
 
 func validateBudgetCapsRequest(reqBody *BudgetCaps) error {
-	if reqBody.Amount <= 0 {
+	if reqBody.BudgetsID <= 0 {
+		return fmt.Errorf("budgets id must be greater than 0")
+	} else if reqBody.BudgetPostsID <= 0 {
+		return fmt.Errorf("budget posts id must be greater than 0")
+	} else if reqBody.Amount <= 0 {
 		return fmt.Errorf("amount must be greater than 0")
 	}
-
 	return nil
-
 }
 
 func (s *APIServer) HandlerBudgetCapsCreate(w http.ResponseWriter, r *http.Request) (interface{}, error) {

@@ -57,9 +57,12 @@ func (s *APIServer) HandlerBudgetPostsGetDataById(w http.ResponseWriter, r *http
 func validateBudgetPostsRequest(reqBody *BudgetPosts) error {
 	if reqBody.Name == "" {
 		return fmt.Errorf("name must be filled")
+	} else if len(reqBody.Name) > 255 {
+		return fmt.Errorf("max length name 255")
+	} else if len(reqBody.Description) > 255 {
+		return fmt.Errorf("max length description  255")
 	}
 	return nil
-
 }
 
 func (s *APIServer) HandlerBudgetPostsCreate(w http.ResponseWriter, r *http.Request) (interface{}, error) {

@@ -9,12 +9,12 @@ type Users struct {
 }
 
 type Activities struct {
-	ID          int64     `json:"id" db:"id"`
-	Name        string    `json:"name" db:"name"`
-	Description string    `json:"description" db:"description"`
-	IsActive    bool      `json:"is_active" db:"is_active"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name" validate:"required,max=255"`
+	Description string    `json:"description" validate:"required"`
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Budgets struct {
@@ -37,16 +37,6 @@ type BudgetPosts struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// type BudgetCaps struct {
-// 	ID            int       `json:"id"`
-// 	BudgetsID     string    `json:"budgets_id"`
-// 	BudgetPostsID string    `json:"budget_posts_id"`
-// 	Amount        float64   `json:"amount"`
-// 	CreatedAt     time.Time `json:"created_at"`
-// 	UpdatedAt     time.Time `json:"updated_at"`
-// }
-
-// BudgetCaps represents the budget_caps table structure.
 type BudgetCaps struct {
 	ID            int64     `json:"id"`
 	BudgetsID     int64     `json:"budgets_id"`
@@ -76,7 +66,38 @@ type BudgetDetailsPosts struct {
 	BudgetPostsID   int64     `json:"budget_posts_id"`
 	PlannedAmount   float64   `json:"planned_amount"`
 	ApprovedAmount  float64   `json:"approved_amount"`
-	UsageAmount     string    `json:"usage_amount"`
+	UsageAmount     float64   `json:"usage_amount"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type FundRequests struct {
+	ID            int64     `json:"id"`
+	BudgetPostsID int64     `json:"budget_posts_id"`
+	Date          time.Time `json:"date"`
+	Type          string    `json:"type"`
+	Amount        float64   `json:"amount"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type FundRequestDetails struct {
+	ID              int64     `json:"id"`
+	FundRequestsID  int64     `json:"fund_requests_id"`
+	ActivitiesID    int64     `json:"activities_id"`
+	BudgetDetailsID int64     `json:"budget_details_id"`
+	Amount          float64   `json:"amount"`
+	Recommendation  string    `json:"recommendation"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type BudgetDetailsPostsRecommendations struct {
+	ID                   int64     `json:"id"`
+	BudgetDetailsPostsID int64     `json:"budget_details_posts_id"`
+	UserGroupsID         int64     `json:"user_groups_id"`
+	Recommendation       float64   `json:"recommendation"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }

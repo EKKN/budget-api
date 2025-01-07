@@ -55,11 +55,17 @@ func (s *APIServer) HandlerBudgetDetailsPostsGetDataById(w http.ResponseWriter, 
 }
 
 func validateBudgetDetailsPostsRequest(reqBody *BudgetDetailsPosts) error {
-	if reqBody.PlannedAmount < 0 {
-		return fmt.Errorf("planned amount must be non-negative")
-	}
-	if reqBody.ApprovedAmount < 0 {
-		return fmt.Errorf("approved amount must be non-negative")
+
+	if reqBody.BudgetDetailsID <= 0 {
+		return fmt.Errorf("budget details id must grater than 0")
+	} else if reqBody.BudgetPostsID <= 0 {
+		return fmt.Errorf("budget post id must grater than 0")
+	} else if reqBody.PlannedAmount <= 0 {
+		return fmt.Errorf("planned amount must grater than 0")
+	} else if reqBody.ApprovedAmount <= 0 {
+		return fmt.Errorf("approved amount must grater than 0")
+	} else if reqBody.UsageAmount <= 0 {
+		return fmt.Errorf("usage amount must grater than 0")
 	}
 
 	return nil

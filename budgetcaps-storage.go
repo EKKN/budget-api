@@ -66,42 +66,6 @@ func (m *BudgetCapsStore) GetDataId(id int64) (*BudgetCaps, error) {
 	return budgetCaps, nil
 }
 
-// udpate table
-// CREATE TABLE budget_caps (
-//     id BIGINT NOT NULL AUTO_INCREMENT,
-//     budgets_id BIGINT NOT NULL,
-//     budget_posts_id BIGINT NOT NULL,
-//     amount DOUBLE,
-//     created_at DATETIME,
-//     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-//     PRIMARY KEY (id),
-//     FOREIGN KEY (budgets_id) REFERENCES budgets(id),
-//     FOREIGN KEY (budget_posts_id) REFERENCES budget_posts(id)
-
-// CREATE TABLE IF NOT EXISTS `mydb`.`budget_caps` (
-//     `id` INT NOT NULL AUTO_INCREMENT,
-//     `budgets_id` VARCHAR(45) NULL,
-//     `budget_posts_id` VARCHAR(45) NULL,
-//     `amount` DOUBLE NULL DEFAULT 0,
-//     `created_at` DATETIME NULL,
-//     `updated_at` DATETIME NULL DEFAULT NOW(),
-//     PRIMARY KEY (`id`),
-//     INDEX `fk_budget_caps_budgets_idx` (`budgets_id` ASC) VISIBLE,
-//     INDEX `fk_budget_caps_posts_idx` (`budget_posts_id` ASC) VISIBLE,
-//     CONSTRAINT `fk_budget_caps_budgets`
-//       FOREIGN KEY (`budgets_id`)
-//       REFERENCES `mydb`.`budgets` (`name`)
-//       ON DELETE NO ACTION
-//       ON UPDATE NO ACTION,
-//     CONSTRAINT `fk_budget_caps_posts`
-//       FOREIGN KEY (`budget_posts_id`)
-//       REFERENCES `mydb`.`budget_posts` (`name`)
-//       ON DELETE NO ACTION
-//       ON UPDATE NO ACTION)
-//   ENGINE = InnoDB;
-
-// );
-
 func (m *BudgetCapsStore) Create(budgetCaps *BudgetCaps) (*BudgetCaps, error) {
 
 	query := `INSERT INTO budget_caps (budgets_id, budget_posts_id, amount, created_at, updated_at) VALUES (?, ?, ?, now(), now())`
