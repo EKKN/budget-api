@@ -69,3 +69,14 @@ type BudgetDetails struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+type BudgetDetailsPosts struct {
+	ID              int64     `json:"id"`
+	BudgetDetailsID int64     `json:"budget_details_id"`
+	BudgetPostsID   int64     `json:"budget_posts_id"`
+	PlannedAmount   float64   `json:"planned_amount"`
+	ApprovedAmount  float64   `json:"approved_amount"`
+	UsageAmount     string    `json:"usage_amount"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
