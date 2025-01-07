@@ -26,14 +26,16 @@ func main() {
 	budgetCapsStorage := NewBudgetCapsStorage(mysql)
 	budgetsStorage := NewBudgetsStorage(mysql)
 	budgetDetailsStorage := NewBudgetDetailsStorage(mysql)
+	budgetDetailsPostsStorage := NewBudgetDetailsPostsStorage(mysql)
 
 	storage := &Storage{
-		ActivitiesStorage:    activitiesStorage,
-		UsersStorage:         usersStorage,
-		BudgetPostsStorage:   budgetPostsStorage,
-		BudgetCapsStorage:    budgetCapsStorage,
-		BudgetsStorage:       budgetsStorage,
-		BudgetDetailsStorage: budgetDetailsStorage,
+		ActivitiesStorage:         activitiesStorage,
+		UsersStorage:              usersStorage,
+		BudgetPostsStorage:        budgetPostsStorage,
+		BudgetCapsStorage:         budgetCapsStorage,
+		BudgetsStorage:            budgetsStorage,
+		BudgetDetailsStorage:      budgetDetailsStorage,
+		BudgetDetailsPostsStorage: budgetDetailsPostsStorage,
 	}
 	AppLog("service run on port ", SERVER_PORT)
 	server := NewAPIServer(SERVER_PORT, storage)
