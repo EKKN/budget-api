@@ -1,14 +1,15 @@
 package main
 
 type Storage struct {
-	UsersStorage                             UsersStorage
-	BudgetsStorage                           BudgetsStorage
-	ActivitiesStorage                        ActivitiesStorage
-	BudgetPostsStorage                       BudgetPostsStorage
-	BudgetCapsStorage                        BudgetCapsStorage
-	BudgetDetailsStorage                     BudgetDetailsStorage
-	BudgetDetailsPostsStorage                BudgetDetailsPostsStorage
-	FundRequestsStorage                      FundRequestsStorage
-	FundRequestDetailsStorage                FundRequestDetailsStorage
-	BudgetDetailsPostsRecommendationsStorage BudgetDetailsPostsRecommendationsStorage
+	ActivitiesStorage          ActivitiesStorage
+	UsersStorage               UsersStorage
+	BudgetPostsStorage         BudgetPostsStorage
+	BudgetCapsStorage          BudgetCapsStorage
+	BudgetsStorage             BudgetsStorage
+	BudgetDetailsStorage       BudgetDetailsStorage
+	BudgetDetailsPostsStorage  BudgetDetailsPostsStorage
+	FundRequestsStorage        FundRequestsStorage
+	FundRequestDetailsStorage  FundRequestDetailsStorage
+	BudgetDetailPostRecStorage BudgetDetailPostRecStorage
+	PrimaryKeyIDStorage        PrimaryKeyIDStorage
 }

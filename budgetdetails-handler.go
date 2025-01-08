@@ -7,59 +7,11 @@ import (
 	"net/http"
 )
 
-func (s *APIServer) HandlerBudgetDetailsGetData(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
-
-	budgetDetails, err := s.Storage.BudgetDetailsStorage.GetData()
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-
-	responseLog := LogResponseSuccess(budgetDetails)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
-}
-
-func (s *APIServer) HandlerBudgetDetailsGetDataById(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
-
-	id, err := s.GetID(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
-	}
-
-	budgetDetail, err := s.Storage.BudgetDetailsStorage.GetDataByID(id)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB %w", err)
-	}
-
-	responseLog := LogResponseSuccess(budgetDetail)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-
-	return responseLog, nil
-}
-
 func validateBudgetDetailsRequest(reqBody *BudgetDetails) error {
 	if reqBody.BudgetsID <= 0 {
-		return fmt.Errorf("budgets id must be greater than 0")
+		return fmt.Errorf("budgets id must be filled")
 	} else if reqBody.ActivitiesID <= 0 {
-		return fmt.Errorf("activities id must be greater than 0")
+		return fmt.Errorf("activities id must be filled")
 	} else if reqBody.Description == "" {
 		return fmt.Errorf("description must be filled")
 	} else if reqBody.Target.IsZero() {
@@ -76,164 +28,124 @@ func validateBudgetDetailsRequest(reqBody *BudgetDetails) error {
 	return nil
 }
 
-func (s *APIServer) HandlerBudgetDetailsCreate(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	bodyBytes, requestLog, err := s.prepareRequest(r)
+func (s *APIServer) GetAllBudgetDetails(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
+
+	budgetDetails, err := s.Storage.BudgetDetailsStorage.GetAll()
 	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
+		return respondWithError(requestLog, "database error", err)
 	}
+	return respondWithSuccess(requestLog, budgetDetails)
+
+}
+
+func (s *APIServer) GetBudgetDetailByID(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
+
+	id, err := s.GetID(r)
+	if err != nil {
+		return respondWithError(requestLog, "invalid ID", err)
+	}
+
+	budgetDetail, err := s.Storage.BudgetDetailsStorage.GetById(id)
+	if err != nil {
+		return respondWithError(requestLog, "database error", err)
+	}
+	return respondWithSuccess(requestLog, budgetDetail)
+
+}
+
+func (s *APIServer) CreateBudgetDetail(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	reqBody := &BudgetDetails{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponseError("error", "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "invalid data request", err)
 	}
 
 	if err := validateBudgetDetailsRequest(reqBody); err != nil {
-		responseLog := LogResponseError("error", err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, err
+		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	ActivitiesByID, err := s.Storage.ActivitiesStorage.GetDataId(reqBody.ActivitiesID)
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetsID:    reqBody.BudgetsID,
+		ActivitiesID: reqBody.ActivitiesID,
+	}
+
+	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	if ActivitiesByID == nil {
-		responseLog := LogResponseError("error", "data activities not found")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("data activities not found")
+	if primaryKey.ActivitiesID == 0 {
+		return respondWithError(requestLog, "data activities not found", fmt.Errorf("data activities not found"))
 	}
 
-	budgetByID, err := s.Storage.BudgetsStorage.GetDataId(reqBody.BudgetsID)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-
-	if budgetByID == nil {
-		responseLog := LogResponseError("error", "data budget not found")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("data budgets not found")
+	if primaryKey.BudgetsID == 0 {
+		return respondWithError(requestLog, "data budgets not found", fmt.Errorf("data budgets not found"))
 	}
 
 	budgetDetail, err := s.Storage.BudgetDetailsStorage.Create(reqBody)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	responseLog := LogResponseSuccess(budgetDetail)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
+	return respondWithSuccess(requestLog, budgetDetail)
+
 }
 
-func (s *APIServer) HandlerBudgetDetailsUpdate(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	bodyBytes, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
+func (s *APIServer) UpdateBudgetDetail(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	id, err := s.GetID(r)
 	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
+		return respondWithError(requestLog, "invalid ID", err)
 	}
 
 	reqBody := &BudgetDetails{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponseError("error", "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "invalid data request", err)
 	}
+
 	if err := validateBudgetDetailsRequest(reqBody); err != nil {
-		responseLog := LogResponseError("error", err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, err
+		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	ActivitiesByID, err := s.Storage.ActivitiesStorage.GetDataId(reqBody.ActivitiesID)
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetsID:    reqBody.BudgetsID,
+		ActivitiesID: reqBody.ActivitiesID,
+	}
+
+	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	if ActivitiesByID == nil {
-		responseLog := LogResponseError("error", "data activities not found")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("data activities not found")
+	if primaryKey.ActivitiesID == 0 {
+		return respondWithError(requestLog, "data activities not found", fmt.Errorf("data activities not found"))
 	}
 
-	budgetByID, err := s.Storage.BudgetsStorage.GetDataId(reqBody.BudgetsID)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-
-	if budgetByID == nil {
-		responseLog := LogResponseError("error", "data budget not found")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("data budgets not found")
+	if primaryKey.BudgetsID == 0 {
+		return respondWithError(requestLog, "data budgets not found", fmt.Errorf("data budgets not found"))
 	}
 
 	updatedBudgetDetail, err := s.Storage.BudgetDetailsStorage.Update(id, reqBody)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+	if err != nil || updatedBudgetDetail == nil {
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	if updatedBudgetDetail == nil {
-		responseLog := LogResponseError("error", "no data found to update")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("no data found to update")
-	}
+	return respondWithSuccess(requestLog, updatedBudgetDetail)
 
-	responseLog := LogResponse("success", updatedBudgetDetail, "")
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
 }
 
-func (s *APIServer) HandlerBudgetDetailsDelete(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
+func (s *APIServer) DeleteBudgetDetail(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	id, err := s.GetID(r)
 	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
+		return respondWithError(requestLog, "invalid ID", err)
 	}
 
 	deletedBudgetDetail, err := s.Storage.BudgetDetailsStorage.Delete(id)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-	if deletedBudgetDetail == nil {
-		responseLog := LogResponseError("error", "no data found to delete")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("no data found to delete")
+	if err != nil || deletedBudgetDetail == nil {
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	responseLog := LogResponseSuccess(deletedBudgetDetail)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
+	return respondWithSuccess(requestLog, deletedBudgetDetail)
+
 }

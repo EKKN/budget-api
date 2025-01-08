@@ -3,73 +3,72 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 type BudgetCapsStorage interface {
 	Create(*BudgetCaps) (*BudgetCaps, error)
 	Delete(int64) (*BudgetCaps, error)
 	Update(int64, *BudgetCaps) (*BudgetCaps, error)
-	UpdateActive(int64, *BudgetCaps) (*BudgetCaps, error)
-	GetDataId(int64) (*BudgetCaps, error)
-	GetData() ([]*BudgetCaps, error)
+	UpdateAmount(int64, *BudgetCaps) (*BudgetCaps, error)
+	GetById(int64) (*BudgetCaps, error)
+	GetAll() ([]*BudgetCaps, error)
 }
 
 type BudgetCapsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewBudgetCapsStorage(db *MysqlDB) *BudgetCapsStore {
+func NewBudgetCapsStorage(db *sql.DB) *BudgetCapsStore {
 	return &BudgetCapsStore{
-		mysql: db,
+		db: db,
 	}
 }
 
-func (m *BudgetCapsStore) GetData() ([]*BudgetCaps, error) {
-	query := `SELECT id, budgets_id, budget_posts_id, amount, created_at, updated_at FROM budget_caps`
-	rows, err := m.mysql.db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get budget caps: %w", err)
-	}
-	defer rows.Close()
-
-	var budgetCapsList []*BudgetCaps
-	for rows.Next() {
-		budgetCaps := &BudgetCaps{}
-		err := rows.Scan(
-			&budgetCaps.ID,
-			&budgetCaps.BudgetsID,
-			&budgetCaps.BudgetPostsID,
-			&budgetCaps.Amount,
-			&budgetCaps.CreatedAt,
-			&budgetCaps.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan budget cap: %w", err)
-		}
-		budgetCapsList = append(budgetCapsList, budgetCaps)
-	}
-	return budgetCapsList, nil
-}
-
-func (m *BudgetCapsStore) GetDataId(id int64) (*BudgetCaps, error) {
-	query := `SELECT id, budgets_id, budget_posts_id, amount, created_at, updated_at FROM budget_caps WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
-
-	budgetCaps := &BudgetCaps{}
-	err := row.Scan(&budgetCaps.ID, &budgetCaps.BudgetsID, &budgetCaps.BudgetPostsID, &budgetCaps.Amount, &budgetCaps.CreatedAt, &budgetCaps.UpdatedAt)
+func scanBudgetCap(row *sql.Row) (*BudgetCaps, error) {
+	budgetCap := &BudgetCaps{}
+	err := row.Scan(&budgetCap.ID, &budgetCap.BudgetsID, &budgetCap.BudgetPostsID, &budgetCap.Amount, &budgetCap.CreatedAt, &budgetCap.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get budget cap by id: %w", err)
+		return nil, fmt.Errorf("failed to scan budget cap: %w", err)
 	}
-	return budgetCaps, nil
+	return budgetCap, nil
 }
 
-func (m *BudgetCapsStore) Create(budgetCaps *BudgetCaps) (*BudgetCaps, error) {
+func scanBudgetCaps(rows *sql.Rows) ([]*BudgetCaps, error) {
+	var budgetCapsList []*BudgetCaps
+	for rows.Next() {
+		budgetCap := &BudgetCaps{}
+		err := rows.Scan(&budgetCap.ID, &budgetCap.BudgetsID, &budgetCap.BudgetPostsID, &budgetCap.Amount, &budgetCap.CreatedAt, &budgetCap.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan budget cap: %w", err)
+		}
+		budgetCapsList = append(budgetCapsList, budgetCap)
+	}
+	return budgetCapsList, nil
+}
 
-	query := `INSERT INTO budget_caps (budgets_id, budget_posts_id, amount, created_at, updated_at) VALUES (?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, budgetCaps.BudgetsID, budgetCaps.BudgetPostsID, budgetCaps.Amount)
+func (s *BudgetCapsStore) GetAll() ([]*BudgetCaps, error) {
+	query := `SELECT id, budgets_id, budget_posts_id, amount, created_at, updated_at FROM budget_caps`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get budget caps: %w", err)
+	}
+	defer rows.Close()
+	return scanBudgetCaps(rows)
+}
+
+func (s *BudgetCapsStore) GetById(id int64) (*BudgetCaps, error) {
+	query := `SELECT id, budgets_id, budget_posts_id, amount, created_at, updated_at FROM budget_caps WHERE id = ?`
+	row := s.db.QueryRow(query, id)
+	return scanBudgetCap(row)
+}
+
+func (s *BudgetCapsStore) Create(budgetCap *BudgetCaps) (*BudgetCaps, error) {
+	query := `INSERT INTO budget_caps (budgets_id, budget_posts_id, amount, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
+	result, err := s.db.Exec(query, budgetCap.BudgetsID, budgetCap.BudgetPostsID, budgetCap.Amount, time.Now(), time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert budget cap: %w", err)
 	}
@@ -77,52 +76,36 @@ func (m *BudgetCapsStore) Create(budgetCaps *BudgetCaps) (*BudgetCaps, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newBudgetCaps, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new budget cap: %w", err)
-	}
-
-	return newBudgetCaps, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *BudgetCapsStore) Delete(id int64) (*BudgetCaps, error) {
-	deletedBudgetCaps, _ := m.GetDataId(id)
-
+func (s *BudgetCapsStore) Delete(id int64) (*BudgetCaps, error) {
+	budgetCap, _ := s.GetById(id)
+	if budgetCap == nil {
+		return nil, fmt.Errorf("budget cap not found")
+	}
 	query := `DELETE FROM budget_caps WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete budget cap: %w", err)
 	}
-
-	return deletedBudgetCaps, nil
+	return budgetCap, nil
 }
 
-func (m *BudgetCapsStore) Update(id int64, budgetCaps *BudgetCaps) (*BudgetCaps, error) {
-	query := `UPDATE budget_caps SET budgets_id = ?, budget_posts_id = ?, amount = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgetCaps.BudgetsID, budgetCaps.BudgetPostsID, budgetCaps.Amount, id)
+func (s *BudgetCapsStore) Update(id int64, budgetCap *BudgetCaps) (*BudgetCaps, error) {
+	query := `UPDATE budget_caps SET budgets_id = ?, budget_posts_id = ?, amount = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, budgetCap.BudgetsID, budgetCap.BudgetPostsID, budgetCap.Amount, time.Now(), id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget cap: %w", err)
 	}
-
-	updatedBudgetCaps, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget cap: %w", err)
-	}
-
-	return updatedBudgetCaps, nil
+	return s.GetById(id)
 }
 
-func (m *BudgetCapsStore) UpdateActive(id int64, budgetCaps *BudgetCaps) (*BudgetCaps, error) {
-	query := `UPDATE budget_caps SET amount = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgetCaps.Amount, id)
+func (s *BudgetCapsStore) UpdateAmount(id int64, budgetCap *BudgetCaps) (*BudgetCaps, error) {
+	query := `UPDATE budget_caps SET amount = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, budgetCap.Amount, time.Now(), id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update budget cap: %w", err)
+		return nil, fmt.Errorf("failed to update budget cap amount: %w", err)
 	}
-
-	updatedBudgetCaps, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget cap: %w", err)
-	}
-
-	return updatedBudgetCaps, nil
+	return s.GetById(id)
 }

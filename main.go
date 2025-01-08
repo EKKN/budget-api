@@ -20,31 +20,33 @@ func main() {
 	}
 	defer mysql.db.Close()
 
-	activitiesStorage := NewActivitiesStorage(mysql)
-	usersStorage := NewUsersStorage(mysql)
-	budgetPostsStorage := NewBudgetPostsStorage(mysql)
-	budgetCapsStorage := NewBudgetCapsStorage(mysql)
-	budgetsStorage := NewBudgetsStorage(mysql)
-	budgetDetailsStorage := NewBudgetDetailsStorage(mysql)
-	budgetDetailsPostsStorage := NewBudgetDetailsPostsStorage(mysql)
-	fundRequestsStorage := NewFundRequestsStorage(mysql)
-	fundRequestDetailsStorage := NewFundRequestDetailsStorage(mysql)
-	budgetDetailsPostsRecommendationsStorage := NewBudgetDetailsPostsRecommendationsStorage(mysql)
+	activitiesStorage := NewActivitiesStorage(mysql.db)
+	usersStorage := NewUsersStorage(mysql.db)
+	budgetPostsStorage := NewBudgetPostsStorage(mysql.db)
+	budgetCapsStorage := NewBudgetCapsStorage(mysql.db)
+	budgetsStorage := NewBudgetsStorage(mysql.db)
+	budgetDetailsStorage := NewBudgetDetailsStorage(mysql.db)
+	budgetDetailsPostsStorage := NewBudgetDetailsPostsStorage(mysql.db)
+	fundRequestsStorage := NewFundRequestsStorage(mysql.db)
+	fundRequestDetailsStorage := NewFundRequestDetailsStorage(mysql.db)
+	budgetDetailPostRecStorage := NewBudgetDetailPostRecStorage(mysql.db)
+
+	primaryKeyIDStorage := NewPrimaryKeyIDStorage(mysql.db)
 
 	storage := &Storage{
-		ActivitiesStorage:                        activitiesStorage,
-		UsersStorage:                             usersStorage,
-		BudgetPostsStorage:                       budgetPostsStorage,
-		BudgetCapsStorage:                        budgetCapsStorage,
-		BudgetsStorage:                           budgetsStorage,
-		BudgetDetailsStorage:                     budgetDetailsStorage,
-		BudgetDetailsPostsStorage:                budgetDetailsPostsStorage,
-		FundRequestsStorage:                      fundRequestsStorage,
-		FundRequestDetailsStorage:                fundRequestDetailsStorage,
-		BudgetDetailsPostsRecommendationsStorage: budgetDetailsPostsRecommendationsStorage,
+		ActivitiesStorage:          activitiesStorage,
+		UsersStorage:               usersStorage,
+		BudgetPostsStorage:         budgetPostsStorage,
+		BudgetCapsStorage:          budgetCapsStorage,
+		BudgetsStorage:             budgetsStorage,
+		BudgetDetailsStorage:       budgetDetailsStorage,
+		BudgetDetailsPostsStorage:  budgetDetailsPostsStorage,
+		FundRequestsStorage:        fundRequestsStorage,
+		FundRequestDetailsStorage:  fundRequestDetailsStorage,
+		BudgetDetailPostRecStorage: budgetDetailPostRecStorage,
+		PrimaryKeyIDStorage:        primaryKeyIDStorage,
 	}
 	AppLog("service run on port ", SERVER_PORT)
 	server := NewAPIServer(SERVER_PORT, storage)
 	server.Run()
-
 }

@@ -9,22 +9,23 @@ type FundRequestDetailsStorage interface {
 	Create(*FundRequestDetails) (*FundRequestDetails, error)
 	Delete(int64) (*FundRequestDetails, error)
 	Update(int64, *FundRequestDetails) (*FundRequestDetails, error)
-	GetDataId(int64) (*FundRequestDetails, error)
-	GetData() ([]*FundRequestDetails, error)
+	GetById(int64) (*FundRequestDetails, error)
+	GetAll() ([]*FundRequestDetails, error)
 }
 
 type FundRequestDetailsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewFundRequestDetailsStorage(db *MysqlDB) *FundRequestDetailsStore {
+func NewFundRequestDetailsStorage(db *sql.DB) *FundRequestDetailsStore {
 	return &FundRequestDetailsStore{
-		mysql: db,
+		db: db,
 	}
 }
-func (m *FundRequestDetailsStore) GetData() ([]*FundRequestDetails, error) {
+
+func (s *FundRequestDetailsStore) GetAll() ([]*FundRequestDetails, error) {
 	query := `SELECT id, fund_requests_id, activities_id, budget_details_id, amount, recommendation, created_at, updated_at FROM fund_request_details`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fund request details: %w", err)
 	}
@@ -51,9 +52,9 @@ func (m *FundRequestDetailsStore) GetData() ([]*FundRequestDetails, error) {
 	return fundRequestDetails, nil
 }
 
-func (m *FundRequestDetailsStore) GetDataId(id int64) (*FundRequestDetails, error) {
+func (s *FundRequestDetailsStore) GetById(id int64) (*FundRequestDetails, error) {
 	query := `SELECT id, fund_requests_id, activities_id, budget_details_id, amount, recommendation, created_at, updated_at FROM fund_request_details WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
 	fundRequestDetail := &FundRequestDetails{}
 	err := row.Scan(&fundRequestDetail.ID, &fundRequestDetail.FundRequestsID, &fundRequestDetail.ActivitiesID, &fundRequestDetail.BudgetDetailsID, &fundRequestDetail.Amount, &fundRequestDetail.Recommendation, &fundRequestDetail.CreatedAt, &fundRequestDetail.UpdatedAt)
@@ -66,10 +67,9 @@ func (m *FundRequestDetailsStore) GetDataId(id int64) (*FundRequestDetails, erro
 	return fundRequestDetail, nil
 }
 
-func (m *FundRequestDetailsStore) Create(fundRequestDetail *FundRequestDetails) (*FundRequestDetails, error) {
-
+func (s *FundRequestDetailsStore) Create(fundRequestDetail *FundRequestDetails) (*FundRequestDetails, error) {
 	query := `INSERT INTO fund_request_details (fund_requests_id, activities_id, budget_details_id, amount, recommendation, created_at, updated_at) VALUES (?, ?, ?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, fundRequestDetail.FundRequestsID, fundRequestDetail.ActivitiesID, fundRequestDetail.BudgetDetailsID, fundRequestDetail.Amount, fundRequestDetail.Recommendation)
+	result, err := s.db.Exec(query, fundRequestDetail.FundRequestsID, fundRequestDetail.ActivitiesID, fundRequestDetail.BudgetDetailsID, fundRequestDetail.Amount, fundRequestDetail.Recommendation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert fund request detail: %w", err)
 	}
@@ -77,19 +77,14 @@ func (m *FundRequestDetailsStore) Create(fundRequestDetail *FundRequestDetails) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newFundRequestDetail, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new fund request detail: %w", err)
-	}
-
-	return newFundRequestDetail, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *FundRequestDetailsStore) Delete(id int64) (*FundRequestDetails, error) {
-	deletedFundRequestDetail, _ := m.GetDataId(id)
+func (s *FundRequestDetailsStore) Delete(id int64) (*FundRequestDetails, error) {
+	deletedFundRequestDetail, _ := s.GetById(id)
 
 	query := `DELETE FROM fund_request_details WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete fund request detail: %w", err)
 	}
@@ -97,17 +92,12 @@ func (m *FundRequestDetailsStore) Delete(id int64) (*FundRequestDetails, error) 
 	return deletedFundRequestDetail, nil
 }
 
-func (m *FundRequestDetailsStore) Update(id int64, fundRequestDetail *FundRequestDetails) (*FundRequestDetails, error) {
+func (s *FundRequestDetailsStore) Update(id int64, fundRequestDetail *FundRequestDetails) (*FundRequestDetails, error) {
 	query := `UPDATE fund_request_details SET fund_requests_id = ?, activities_id = ?, budget_details_id = ?, amount = ?, recommendation = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, fundRequestDetail.FundRequestsID, fundRequestDetail.ActivitiesID, fundRequestDetail.BudgetDetailsID, fundRequestDetail.Amount, fundRequestDetail.Recommendation, id)
+	_, err := s.db.Exec(query, fundRequestDetail.FundRequestsID, fundRequestDetail.ActivitiesID, fundRequestDetail.BudgetDetailsID, fundRequestDetail.Amount, fundRequestDetail.Recommendation, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update fund request detail: %w", err)
 	}
 
-	updatedFundRequestDetail, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated fund request detail: %w", err)
-	}
-
-	return updatedFundRequestDetail, nil
+	return s.GetById(id)
 }

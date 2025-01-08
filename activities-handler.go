@@ -7,234 +7,137 @@ import (
 	"net/http"
 )
 
-func (s *APIServer) HandlerActivitiesGetData(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
-
-	activity, err := s.Storage.ActivitiesStorage.GetData()
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-
-	responseLog := LogResponseSuccess(activity)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
-}
-
-func (s *APIServer) HandlerActivitiesGetDataById(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
-
-	id, err := s.GetID(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
-	}
-	activity, err := s.Storage.ActivitiesStorage.GetDataId(id)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB %w", err)
-	}
-
-	responseLog := LogResponseSuccess(activity)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-
-	return responseLog, nil
-}
-
-func validateActivitiesRequest(reqBody *Activities) error {
+func validateActivityRequest(reqBody *Activities) error {
 	if reqBody.Name == "" {
 		return fmt.Errorf("name must be filled")
 	} else if len(reqBody.Name) > 255 {
 		return fmt.Errorf("max length name 255")
 	} else if len(reqBody.Description) > 255 {
-		return fmt.Errorf("max length description  255")
+		return fmt.Errorf("max length description 255")
 	}
 	return nil
 }
 
-func (s *APIServer) HandlerActivitiesCreate(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	bodyBytes, requestLog, err := s.prepareRequest(r)
+func (s *APIServer) GetAllActivities(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
+
+	activities, err := s.Storage.ActivitiesStorage.GetAll()
 	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
+		return respondWithError(requestLog, "database error", err)
 	}
+	return respondWithSuccess(requestLog, activities)
+
+}
+
+func (s *APIServer) GetActivityByID(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
+
+	id, err := s.GetID(r)
+	if err != nil {
+		return respondWithError(requestLog, "invalid ID", err)
+	}
+
+	activity, err := s.Storage.ActivitiesStorage.GetById(id)
+	if err != nil {
+		return respondWithError(requestLog, "database error", err)
+	}
+	return respondWithSuccess(requestLog, activity)
+
+}
+
+func (s *APIServer) CreateActivity(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	reqBody := &Activities{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponseError("error", "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "invalid data request", err)
 	}
 
-	if err := validateActivitiesRequest(reqBody); err != nil {
-		responseLog := LogResponseError("error", err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, err
+	if err := validateActivityRequest(reqBody); err != nil {
+		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	activityByName, err := s.Storage.ActivitiesStorage.GetIdByName(reqBody.Name)
+	activityByName, err := s.Storage.ActivitiesStorage.GetByName(reqBody.Name)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
 	if activityByName != nil {
-		responseLog := LogResponseError("error", "name already in use")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("name already in use")
+		return respondWithError(requestLog, "name already in use", nil)
 	}
 
 	activity, err := s.Storage.ActivitiesStorage.Create(reqBody)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	responseLog := LogResponseSuccess(activity)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
+	return respondWithSuccess(requestLog, activity)
+
 }
 
-func (s *APIServer) HandlerActivitiesUpdate(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	bodyBytes, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
+func (s *APIServer) UpdateActivity(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	id, err := s.GetID(r)
 	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
+		return respondWithError(requestLog, "invalid ID", err)
 	}
 
 	reqBody := &Activities{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponseError("error", "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "invalid data request", err)
 	}
 
-	if err := validateActivitiesRequest(reqBody); err != nil {
-		responseLog := LogResponseError("error", err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, err
+	if err := validateActivityRequest(reqBody); err != nil {
+		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	activityByName, err := s.Storage.ActivitiesStorage.GetIdByName(reqBody.Name)
+	activityByName, err := s.Storage.ActivitiesStorage.GetByName(reqBody.Name)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	if activityByName != nil {
-		if activityByName.ID != id {
-			responseLog := LogResponseError("error", "name already in use")
-			AppLog(LogRequestResponse(requestLog, responseLog))
-			return nil, fmt.Errorf("name already in use")
-		}
+	if activityByName != nil && activityByName.ID != id {
+		return respondWithError(requestLog, "name already in use", nil)
 	}
 
 	updatedActivity, err := s.Storage.ActivitiesStorage.Update(id, reqBody)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-
+	if err != nil || updatedActivity == nil {
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	if updatedActivity == nil {
-		responseLog := LogResponseError("error", "no data found to update")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("no data found to update")
-	}
+	return respondWithSuccess(requestLog, updatedActivity)
 
-	responseLog := LogResponse("success", updatedActivity, "")
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
 }
 
-func (s *APIServer) HandlerActivitiesDelete(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	_, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
+func (s *APIServer) DeleteActivity(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	id, err := s.GetID(r)
 	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
+		return respondWithError(requestLog, "invalid ID", err)
 	}
 
 	deletedActivity, err := s.Storage.ActivitiesStorage.Delete(id)
-	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
-	}
-	if deletedActivity == nil {
-		responseLog := LogResponseError("error", "no data found to delete")
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("no data found to delete")
+	if err != nil || deletedActivity == nil {
+		return respondWithError(requestLog, "database error", err)
 	}
 
-	responseLog := LogResponseSuccess(deletedActivity)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
+	return respondWithSuccess(requestLog, deletedActivity)
+
 }
 
-func (s *APIServer) HandlerActivitiesUpdateActiveById(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	bodyBytes, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponseError("error", "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
+func (s *APIServer) UpdateActivityStatusByID(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	id, err := s.GetID(r)
 	if err != nil {
-		responseLog := LogResponseError("error", "invalid ID "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("invalid ID")
+		return respondWithError(requestLog, "invalid ID", err)
 	}
 
 	reqBody := &Activities{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponseError("error", "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "invalid data request", err)
 	}
 
 	updatedActivity, err := s.Storage.ActivitiesStorage.UpdateActive(id, reqBody)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
+	return respondWithSuccess(requestLog, updatedActivity)
 
-	responseLog := LogResponseSuccess(updatedActivity)
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	return responseLog, nil
 }

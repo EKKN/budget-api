@@ -1,4 +1,3 @@
-// logger.go
 package main
 
 import (
@@ -129,27 +128,13 @@ func BodyToJSONSlices(body io.Reader) ([]map[string]interface{}, error) {
 			return nil, fmt.Errorf("failed to decode request body: %w", err)
 		}
 
-		// Append the decoded body to the result
 		result = append(result, body)
 	}
 
 	return result, nil
 }
 
-func ReadAndRestoreRequestBody(r *http.Request) ([]byte, error) {
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read request body: %w", err)
-	}
-
-	// Restore the request body for further use
-	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-	return bodyBytes, nil
-}
-
 func LogRequest(r *http.Request, bodyBytes []byte) map[string]interface{} {
-	// Decode bodyJSON
 	bodyJSON, err := BodyToJSONSlices(bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		rawBody := string(bodyBytes)
@@ -160,7 +145,6 @@ func LogRequest(r *http.Request, bodyBytes []byte) map[string]interface{} {
 		}
 	}
 
-	// Get client IP address
 	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		clientIP = r.RemoteAddr
@@ -189,21 +173,6 @@ func LogRequest(r *http.Request, bodyBytes []byte) map[string]interface{} {
 	}
 
 	return requestLog
-}
-
-func LogResponse(status string, data interface{}, message string) map[string]interface{} {
-	responseLog := map[string]interface{}{
-		"status": "success",
-		"data":   data,
-	}
-	if status != "success" {
-		responseLog = map[string]interface{}{
-			"status":  status,
-			"message": message,
-		}
-	}
-
-	return responseLog
 }
 
 func LogResponseError(status string, message string) map[string]interface{} {
@@ -236,13 +205,12 @@ func LogResponseSuccessMap(responseLog map[string]interface{}) map[string]interf
 }
 
 func LogRequestResponse(requestLog, responseLog map[string]interface{}) string {
-	// Combine request and response logs
+
 	logData := map[string]interface{}{
 		"request":  requestLog,
 		"response": responseLog,
 	}
 
-	// Convert the log to JSON
 	logJSON, err := json.Marshal(logData)
 	if err != nil {
 		log.Printf("Failed to encode log to JSON: %v", err)
@@ -250,4 +218,25 @@ func LogRequestResponse(requestLog, responseLog map[string]interface{}) string {
 	}
 
 	return string(logJSON)
+}
+
+func respondWithError(requestLog map[string]interface{}, message string, err error) (interface{}, error) {
+	emptyErr := fmt.Sprintf("%s: %v", message, err)
+	if err == nil {
+		emptyErr = message
+	}
+	responseLog := LogResponseError("error", emptyErr)
+	AppLog(LogRequestResponse(requestLog, responseLog))
+	return nil, fmt.Errorf("%s", message)
+}
+
+func respondWithSuccess(requestLog map[string]interface{}, data interface{}) (interface{}, error) {
+	responseLog := LogResponseSuccess(data)
+	AppLog(LogRequestResponse(requestLog, responseLog))
+	return responseLog, nil
+}
+
+func respondWithSuccessStruct(requestLog map[string]interface{}, mapData map[string]interface{}) (interface{}, error) {
+	AppLog(LogRequestResponse(requestLog, mapData))
+	return mapData, nil
 }

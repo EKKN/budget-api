@@ -5,37 +5,33 @@ import (
 	"fmt"
 )
 
-// BudgetDetailsStorage interface
 type BudgetDetailsStorage interface {
 	Create(*BudgetDetails) (*BudgetDetails, error)
 	Delete(int64) (*BudgetDetails, error)
 	Update(int64, *BudgetDetails) (*BudgetDetails, error)
-	GetDataByID(int64) (*BudgetDetails, error)
-	GetData() ([]*BudgetDetails, error)
+	GetById(int64) (*BudgetDetails, error)
+	GetAll() ([]*BudgetDetails, error)
 }
 
-// BudgetDetailsStore struct
 type BudgetDetailsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-// NewBudgetDetailsStorage initializes BudgetDetailsStore
-func NewBudgetDetailsStorage(db *MysqlDB) *BudgetDetailsStore {
+func NewBudgetDetailsStorage(db *sql.DB) *BudgetDetailsStore {
 	return &BudgetDetailsStore{
-		mysql: db,
+		db: db,
 	}
 }
 
-// GetData retrieves all budget details
-func (m *BudgetDetailsStore) GetData() ([]*BudgetDetails, error) {
+func (s *BudgetDetailsStore) GetAll() ([]*BudgetDetails, error) {
 	query := `SELECT id, budgets_id, activities_id, description, target, quantity, unit_value, total, terms, created_at, updated_at FROM budget_details`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budget details: %w", err)
 	}
 	defer rows.Close()
 
-	var budgetDetails []*BudgetDetails
+	var budgetDetailsList []*BudgetDetails
 	for rows.Next() {
 		budgetDetail := &BudgetDetails{}
 		err := rows.Scan(
@@ -54,15 +50,14 @@ func (m *BudgetDetailsStore) GetData() ([]*BudgetDetails, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan budget detail: %w", err)
 		}
-		budgetDetails = append(budgetDetails, budgetDetail)
+		budgetDetailsList = append(budgetDetailsList, budgetDetail)
 	}
-	return budgetDetails, nil
+	return budgetDetailsList, nil
 }
 
-// GetDataByID retrieves budget detail by ID
-func (m *BudgetDetailsStore) GetDataByID(id int64) (*BudgetDetails, error) {
+func (s *BudgetDetailsStore) GetById(id int64) (*BudgetDetails, error) {
 	query := `SELECT id, budgets_id, activities_id, description, target, quantity, unit_value, total, terms, created_at, updated_at FROM budget_details WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
 	budgetDetail := &BudgetDetails{}
 	err := row.Scan(
@@ -87,10 +82,9 @@ func (m *BudgetDetailsStore) GetDataByID(id int64) (*BudgetDetails, error) {
 	return budgetDetail, nil
 }
 
-// Create inserts a new budget detail
-func (m *BudgetDetailsStore) Create(budgetDetail *BudgetDetails) (*BudgetDetails, error) {
+func (s *BudgetDetailsStore) Create(budgetDetail *BudgetDetails) (*BudgetDetails, error) {
 	query := `INSERT INTO budget_details (budgets_id, activities_id, description, target, quantity, unit_value, total, terms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, budgetDetail.BudgetsID, budgetDetail.ActivitiesID, budgetDetail.Description, budgetDetail.Target, budgetDetail.Quantity, budgetDetail.UnitValue, budgetDetail.Total, budgetDetail.Terms)
+	result, err := s.db.Exec(query, budgetDetail.BudgetsID, budgetDetail.ActivitiesID, budgetDetail.Description, budgetDetail.Target, budgetDetail.Quantity, budgetDetail.UnitValue, budgetDetail.Total, budgetDetail.Terms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert budget detail: %w", err)
 	}
@@ -98,40 +92,28 @@ func (m *BudgetDetailsStore) Create(budgetDetail *BudgetDetails) (*BudgetDetails
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newBudgetDetail, err := m.GetDataByID(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new budget detail: %w", err)
-	}
-
-	return newBudgetDetail, nil
+	return s.GetById(lastInsertID)
 }
 
-// Delete removes a budget detail by ID
-func (m *BudgetDetailsStore) Delete(id int64) (*BudgetDetails, error) {
-	deletedBudgetDetail, _ := m.GetDataByID(id)
-
+func (s *BudgetDetailsStore) Delete(id int64) (*BudgetDetails, error) {
+	budgetDetail, _ := s.GetById(id)
+	if budgetDetail == nil {
+		return nil, fmt.Errorf("budget detail not found")
+	}
 	query := `DELETE FROM budget_details WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete budget detail: %w", err)
 	}
-
-	return deletedBudgetDetail, nil
+	return budgetDetail, nil
 }
 
-// Update modifies a budget detail
-func (m *BudgetDetailsStore) Update(id int64, budgetDetail *BudgetDetails) (*BudgetDetails, error) {
+func (s *BudgetDetailsStore) Update(id int64, budgetDetail *BudgetDetails) (*BudgetDetails, error) {
 	query := `UPDATE budget_details SET budgets_id = ?, activities_id = ?, description = ?, target = ?, quantity = ?, unit_value = ?, total = ?, terms = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgetDetail.BudgetsID, budgetDetail.ActivitiesID, budgetDetail.Description, budgetDetail.Target, budgetDetail.Quantity, budgetDetail.UnitValue, budgetDetail.Total, budgetDetail.Terms, id)
+	_, err := s.db.Exec(query, budgetDetail.BudgetsID, budgetDetail.ActivitiesID, budgetDetail.Description, budgetDetail.Target, budgetDetail.Quantity, budgetDetail.UnitValue, budgetDetail.Total, budgetDetail.Terms, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget detail: %w", err)
 	}
-	AppLog(1)
 
-	updatedBudgetDetail, err := m.GetDataByID(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget detail: %w", err)
-	}
-
-	return updatedBudgetDetail, nil
+	return s.GetById(id)
 }

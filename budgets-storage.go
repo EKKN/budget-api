@@ -9,41 +9,40 @@ type BudgetsStorage interface {
 	Create(*Budgets) (*Budgets, error)
 	Delete(int64) (*Budgets, error)
 	Update(int64, *Budgets) (*Budgets, error)
-	GetDataId(int64) (*Budgets, error)
-	GetData() ([]*Budgets, error)
+	GetById(int64) (*Budgets, error)
+	GetAll() ([]*Budgets, error)
 	UpdateApproved(int64, *Budgets) (*Budgets, error)
-	GetIdByName(string) (*Budgets, error)
+	GetByName(string) (*Budgets, error)
 }
 
 type BudgetsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewBudgetsStorage(db *MysqlDB) *BudgetsStore {
+func NewBudgetsStorage(db *sql.DB) *BudgetsStore {
 	return &BudgetsStore{
-		mysql: db,
+		db: db,
 	}
 }
 
-func (m *BudgetsStore) GetIdByName(name string) (*Budgets, error) {
+func (s *BudgetsStore) GetByName(name string) (*Budgets, error) {
 	query := `SELECT id, name, description, periode, is_approved, units_id, created_at, updated_at FROM budgets WHERE name = ?`
-	row := m.mysql.db.QueryRow(query, name)
+	row := s.db.QueryRow(query, name)
 
-	budgets := &Budgets{}
-	err := row.Scan(&budgets.ID, &budgets.Name, &budgets.Description, &budgets.Periode, &budgets.IsApproved, &budgets.UnitsID, &budgets.CreatedAt, &budgets.UpdatedAt)
+	budget := &Budgets{}
+	err := row.Scan(&budget.ID, &budget.Name, &budget.Description, &budget.Periode, &budget.IsApproved, &budget.UnitsID, &budget.CreatedAt, &budget.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-
 		return nil, fmt.Errorf("failed to get budget by name: %w", err)
 	}
-	return budgets, nil
+	return budget, nil
 }
 
-func (m *BudgetsStore) GetData() ([]*Budgets, error) {
+func (s *BudgetsStore) GetAll() ([]*Budgets, error) {
 	query := `SELECT id, name, description, periode, is_approved, units_id, created_at, updated_at FROM budgets`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budgets: %w", err)
 	}
@@ -51,43 +50,43 @@ func (m *BudgetsStore) GetData() ([]*Budgets, error) {
 
 	var budgetsList []*Budgets
 	for rows.Next() {
-		budgets := &Budgets{}
+		budget := &Budgets{}
 		err := rows.Scan(
-			&budgets.ID,
-			&budgets.Name,
-			&budgets.Description,
-			&budgets.Periode,
-			&budgets.IsApproved,
-			&budgets.UnitsID,
-			&budgets.CreatedAt,
-			&budgets.UpdatedAt,
+			&budget.ID,
+			&budget.Name,
+			&budget.Description,
+			&budget.Periode,
+			&budget.IsApproved,
+			&budget.UnitsID,
+			&budget.CreatedAt,
+			&budget.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan budget: %w", err)
 		}
-		budgetsList = append(budgetsList, budgets)
+		budgetsList = append(budgetsList, budget)
 	}
 	return budgetsList, nil
 }
 
-func (m *BudgetsStore) GetDataId(id int64) (*Budgets, error) {
+func (s *BudgetsStore) GetById(id int64) (*Budgets, error) {
 	query := `SELECT id, name, description, periode, is_approved, units_id, created_at, updated_at FROM budgets WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
-	budgets := &Budgets{}
-	err := row.Scan(&budgets.ID, &budgets.Name, &budgets.Description, &budgets.Periode, &budgets.IsApproved, &budgets.UnitsID, &budgets.CreatedAt, &budgets.UpdatedAt)
+	budget := &Budgets{}
+	err := row.Scan(&budget.ID, &budget.Name, &budget.Description, &budget.Periode, &budget.IsApproved, &budget.UnitsID, &budget.CreatedAt, &budget.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get budget by id: %w", err)
 	}
-	return budgets, nil
+	return budget, nil
 }
 
-func (m *BudgetsStore) Create(budgets *Budgets) (*Budgets, error) {
+func (s *BudgetsStore) Create(budget *Budgets) (*Budgets, error) {
 	query := `INSERT INTO budgets (name, description, periode, is_approved, units_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, budgets.Name, budgets.Description, budgets.Periode, budgets.IsApproved, budgets.UnitsID)
+	result, err := s.db.Exec(query, budget.Name, budget.Description, budget.Periode, budget.IsApproved, budget.UnitsID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert budget: %w", err)
 	}
@@ -95,54 +94,37 @@ func (m *BudgetsStore) Create(budgets *Budgets) (*Budgets, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newBudgets, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new budget: %w", err)
-	}
-
-	return newBudgets, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *BudgetsStore) Delete(id int64) (*Budgets, error) {
-	deletedBudgets, _ := m.GetDataId(id)
+func (s *BudgetsStore) Delete(id int64) (*Budgets, error) {
+	deletedBudget, _ := s.GetById(id)
 
 	query := `DELETE FROM budgets WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete budget: %w", err)
 	}
 
-	return deletedBudgets, nil
+	return deletedBudget, nil
 }
 
-func (m *BudgetsStore) Update(id int64, budgets *Budgets) (*Budgets, error) {
+func (s *BudgetsStore) Update(id int64, budget *Budgets) (*Budgets, error) {
 	query := `UPDATE budgets SET name = ?, description = ?, periode = ?, is_approved = ?, units_id = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgets.Name, budgets.Description, budgets.Periode, budgets.IsApproved, budgets.UnitsID, id)
+	_, err := s.db.Exec(query, budget.Name, budget.Description, budget.Periode, budget.IsApproved, budget.UnitsID, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget: %w", err)
 	}
 
-	updatedBudgets, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget: %w", err)
-	}
-
-	return updatedBudgets, nil
+	return s.GetById(id)
 }
 
-func (m *BudgetsStore) UpdateApproved(id int64, budgets *Budgets) (*Budgets, error) {
-
+func (s *BudgetsStore) UpdateApproved(id int64, budget *Budgets) (*Budgets, error) {
 	query := `UPDATE budgets SET is_approved = ?, updated_at = now() WHERE id = ?`
-	AppLog(query, budgets.IsApproved, id)
-	_, err := m.mysql.db.Exec(query, budgets.IsApproved, id)
+	_, err := s.db.Exec(query, budget.IsApproved, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update budget post approval status: %w", err)
+		return nil, fmt.Errorf("failed to update budget approval status: %w", err)
 	}
 
-	updatedBudgetPosts, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget post: %w", err)
-	}
-
-	return updatedBudgetPosts, nil
+	return s.GetById(id)
 }

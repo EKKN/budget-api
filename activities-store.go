@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 type ActivitiesStorage interface {
@@ -10,56 +11,38 @@ type ActivitiesStorage interface {
 	Delete(int64) (*Activities, error)
 	Update(int64, *Activities) (*Activities, error)
 	UpdateActive(int64, *Activities) (*Activities, error)
-	GetDataId(int64) (*Activities, error)
-	GetData() ([]*Activities, error)
-	GetIdByName(string) (*Activities, error)
+	GetById(int64) (*Activities, error)
+	GetAll() ([]*Activities, error)
+	GetByName(string) (*Activities, error)
 }
 
 type ActivitiesStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewActivitiesStorage(db *MysqlDB) *ActivitiesStore {
+func NewActivitiesStorage(db *sql.DB) *ActivitiesStore {
 	return &ActivitiesStore{
-		mysql: db,
+		db: db,
 	}
 }
 
-func (m *ActivitiesStore) GetIdByName(name string) (*Activities, error) {
-	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities WHERE name = ?`
-	row := m.mysql.db.QueryRow(query, name)
-
+func scanActivity(row *sql.Row) (*Activities, error) {
 	activity := &Activities{}
 	err := row.Scan(&activity.ID, &activity.Name, &activity.Description, &activity.IsActive, &activity.CreatedAt, &activity.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-
-		return nil, fmt.Errorf("failed to get activity by id: %w", err)
+		return nil, fmt.Errorf("failed to scan activity: %w", err)
 	}
 	return activity, nil
 }
 
-func (m *ActivitiesStore) GetData() ([]*Activities, error) {
-	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities`
-	rows, err := m.mysql.db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get activities: %w", err)
-	}
-	defer rows.Close()
-
+func scanActivities(rows *sql.Rows) ([]*Activities, error) {
 	var activities []*Activities
 	for rows.Next() {
 		activity := &Activities{}
-		err := rows.Scan(
-			&activity.ID,
-			&activity.Name,
-			&activity.Description,
-			&activity.IsActive,
-			&activity.CreatedAt,
-			&activity.UpdatedAt,
-		)
+		err := rows.Scan(&activity.ID, &activity.Name, &activity.Description, &activity.IsActive, &activity.CreatedAt, &activity.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan activity: %w", err)
 		}
@@ -68,25 +51,31 @@ func (m *ActivitiesStore) GetData() ([]*Activities, error) {
 	return activities, nil
 }
 
-func (m *ActivitiesStore) GetDataId(id int64) (*Activities, error) {
-	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
-
-	activity := &Activities{}
-	err := row.Scan(&activity.ID, &activity.Name, &activity.Description, &activity.IsActive, &activity.CreatedAt, &activity.UpdatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get activity by id: %w", err)
-	}
-	return activity, nil
+func (s *ActivitiesStore) GetByName(name string) (*Activities, error) {
+	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities WHERE name = ?`
+	row := s.db.QueryRow(query, name)
+	return scanActivity(row)
 }
 
-func (m *ActivitiesStore) Create(activity *Activities) (*Activities, error) {
+func (s *ActivitiesStore) GetAll() ([]*Activities, error) {
+	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activities: %w", err)
+	}
+	defer rows.Close()
+	return scanActivities(rows)
+}
 
-	query := `INSERT INTO activities (name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, activity.Name, activity.Description, activity.IsActive)
+func (s *ActivitiesStore) GetById(id int64) (*Activities, error) {
+	query := `SELECT id, name, description, is_active, created_at, updated_at FROM activities WHERE id = ?`
+	row := s.db.QueryRow(query, id)
+	return scanActivity(row)
+}
+
+func (s *ActivitiesStore) Create(activity *Activities) (*Activities, error) {
+	query := `INSERT INTO activities (name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
+	result, err := s.db.Exec(query, activity.Name, activity.Description, activity.IsActive, time.Now(), time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert activity: %w", err)
 	}
@@ -94,53 +83,36 @@ func (m *ActivitiesStore) Create(activity *Activities) (*Activities, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newActivity, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new activity: %w", err)
-	}
-
-	return newActivity, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *ActivitiesStore) Delete(id int64) (*Activities, error) {
-	deletedActivity, _ := m.GetDataId(id)
-
+func (s *ActivitiesStore) Delete(id int64) (*Activities, error) {
+	activity, _ := s.GetById(id)
+	if activity == nil {
+		return nil, fmt.Errorf("activity not found")
+	}
 	query := `DELETE FROM activities WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete activity: %w", err)
 	}
-
-	return deletedActivity, nil
+	return activity, nil
 }
 
-func (m *ActivitiesStore) Update(id int64, activity *Activities) (*Activities, error) {
-	query := `UPDATE activities SET name = ?, description = ?, is_active = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, activity.Name, activity.Description, activity.IsActive, id)
+func (s *ActivitiesStore) Update(id int64, activity *Activities) (*Activities, error) {
+	query := `UPDATE activities SET name = ?, description = ?, is_active = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, activity.Name, activity.Description, activity.IsActive, time.Now(), id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update activity: %w", err)
 	}
-
-	updatedActivity, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated activity: %w", err)
-	}
-
-	return updatedActivity, nil
+	return s.GetById(id)
 }
 
-func (m *ActivitiesStore) UpdateActive(id int64, activity *Activities) (*Activities, error) {
-	query := `UPDATE activities SET  is_active = ?, updated_at = now() WHERE id = ?`
-
-	_, err := m.mysql.db.Exec(query, activity.IsActive, id)
+func (s *ActivitiesStore) UpdateActive(id int64, activity *Activities) (*Activities, error) {
+	query := `UPDATE activities SET is_active = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, activity.IsActive, time.Now(), id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update activity: %w", err)
 	}
-
-	updatedActivity, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated activity: %w", err)
-	}
-
-	return updatedActivity, nil
+	return s.GetById(id)
 }

@@ -3,48 +3,35 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
-func (s *APIServer) HandlerUserLogin(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (s *APIServer) UserLogin(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
+
 	AppLog("username login")
-	bodyBytes, requestLog, err := s.prepareRequest(r)
-	if err != nil {
-		responseLog := LogResponse("error", nil, "failed to prepare request "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to prepare request")
-	}
 
 	reqBody := &Users{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
-		responseLog := LogResponse("error", nil, "failed to decode request body "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("failed to decode request body")
+		return respondWithError(requestLog, "failed to decode request body", err)
 	}
 
-	user, err := s.Storage.UsersStorage.GetDataByLogin(reqBody)
+	user, err := s.Storage.UsersStorage.GetByLogin(reqBody)
 	if err != nil {
-		responseLog := LogResponseError("error", "error DB "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error DB")
+		return respondWithError(requestLog, "database error", err)
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return respondWithError(requestLog, "user not found", nil)
 	}
 
 	tokenJwt, err := CreateJwt(user)
 	if err != nil {
-		responseLog := LogResponseError("error", "create jwt "+err.Error())
-		AppLog(LogRequestResponse(requestLog, responseLog))
-		return nil, fmt.Errorf("error token")
+		return respondWithError(requestLog, "error creating JWT", err)
 	}
 
 	responseLog := map[string]interface{}{
 		"status": "success",
+		"token":  tokenJwt,
 	}
 
-	AppLog(LogRequestResponse(requestLog, responseLog))
-	responseLog["token"] = tokenJwt
-	return responseLog, nil
+	return respondWithSuccessStruct(requestLog, responseLog)
 }

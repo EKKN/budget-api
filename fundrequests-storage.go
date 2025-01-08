@@ -10,23 +10,24 @@ type FundRequestsStorage interface {
 	Delete(int64) (*FundRequests, error)
 	Update(int64, *FundRequests) (*FundRequests, error)
 	UpdateActive(int64, *FundRequests) (*FundRequests, error)
-	GetDataId(int64) (*FundRequests, error)
-	GetData() ([]*FundRequests, error)
-	GetIdByName(string) (*FundRequests, error)
+	GetById(int64) (*FundRequests, error)
+	GetAll() ([]*FundRequests, error)
+	GetByName(string) (*FundRequests, error)
 }
 
 type FundRequestsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewFundRequestsStorage(db *MysqlDB) *FundRequestsStore {
+func NewFundRequestsStorage(db *sql.DB) *FundRequestsStore {
 	return &FundRequestsStore{
-		mysql: db,
+		db: db,
 	}
 }
-func (m *FundRequestsStore) GetIdByName(name string) (*FundRequests, error) {
+
+func (s *FundRequestsStore) GetByName(name string) (*FundRequests, error) {
 	query := `SELECT id, budget_posts_id, date, type, amount, status, created_at, updated_at FROM fund_requests WHERE name = ?`
-	row := m.mysql.db.QueryRow(query, name)
+	row := s.db.QueryRow(query, name)
 
 	fundRequest := &FundRequests{}
 	err := row.Scan(&fundRequest.ID, &fundRequest.BudgetPostsID, &fundRequest.Date, &fundRequest.Type, &fundRequest.Amount, &fundRequest.Status, &fundRequest.CreatedAt, &fundRequest.UpdatedAt)
@@ -34,15 +35,14 @@ func (m *FundRequestsStore) GetIdByName(name string) (*FundRequests, error) {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-
-		return nil, fmt.Errorf("failed to get fund request by id: %w", err)
+		return nil, fmt.Errorf("failed to get fund request by name: %w", err)
 	}
 	return fundRequest, nil
 }
 
-func (m *FundRequestsStore) GetData() ([]*FundRequests, error) {
+func (s *FundRequestsStore) GetAll() ([]*FundRequests, error) {
 	query := `SELECT id, budget_posts_id, date, type, amount, status, created_at, updated_at FROM fund_requests`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fund requests: %w", err)
 	}
@@ -69,9 +69,9 @@ func (m *FundRequestsStore) GetData() ([]*FundRequests, error) {
 	return fundRequests, nil
 }
 
-func (m *FundRequestsStore) GetDataId(id int64) (*FundRequests, error) {
+func (s *FundRequestsStore) GetById(id int64) (*FundRequests, error) {
 	query := `SELECT id, budget_posts_id, date, type, amount, status, created_at, updated_at FROM fund_requests WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
 	fundRequest := &FundRequests{}
 	err := row.Scan(&fundRequest.ID, &fundRequest.BudgetPostsID, &fundRequest.Date, &fundRequest.Type, &fundRequest.Amount, &fundRequest.Status, &fundRequest.CreatedAt, &fundRequest.UpdatedAt)
@@ -84,10 +84,9 @@ func (m *FundRequestsStore) GetDataId(id int64) (*FundRequests, error) {
 	return fundRequest, nil
 }
 
-func (m *FundRequestsStore) Create(fundRequest *FundRequests) (*FundRequests, error) {
-
+func (s *FundRequestsStore) Create(fundRequest *FundRequests) (*FundRequests, error) {
 	query := `INSERT INTO fund_requests (budget_posts_id, date, type, amount, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, fundRequest.BudgetPostsID, fundRequest.Date, fundRequest.Type, fundRequest.Amount, fundRequest.Status)
+	result, err := s.db.Exec(query, fundRequest.BudgetPostsID, fundRequest.Date, fundRequest.Type, fundRequest.Amount, fundRequest.Status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert fund request: %w", err)
 	}
@@ -95,19 +94,14 @@ func (m *FundRequestsStore) Create(fundRequest *FundRequests) (*FundRequests, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newFundRequest, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new fund request: %w", err)
-	}
-
-	return newFundRequest, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *FundRequestsStore) Delete(id int64) (*FundRequests, error) {
-	deletedFundRequest, _ := m.GetDataId(id)
+func (s *FundRequestsStore) Delete(id int64) (*FundRequests, error) {
+	deletedFundRequest, _ := s.GetById(id)
 
 	query := `DELETE FROM fund_requests WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete fund request: %w", err)
 	}
@@ -115,33 +109,23 @@ func (m *FundRequestsStore) Delete(id int64) (*FundRequests, error) {
 	return deletedFundRequest, nil
 }
 
-func (m *FundRequestsStore) Update(id int64, fundRequest *FundRequests) (*FundRequests, error) {
+func (s *FundRequestsStore) Update(id int64, fundRequest *FundRequests) (*FundRequests, error) {
 	query := `UPDATE fund_requests SET budget_posts_id = ?, date = ?, type = ?, amount = ?, status = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, fundRequest.BudgetPostsID, fundRequest.Date, fundRequest.Type, fundRequest.Amount, fundRequest.Status, id)
+	_, err := s.db.Exec(query, fundRequest.BudgetPostsID, fundRequest.Date, fundRequest.Type, fundRequest.Amount, fundRequest.Status, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update fund request: %w", err)
 	}
 
-	updatedFundRequest, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated fund request: %w", err)
-	}
-
-	return updatedFundRequest, nil
+	return s.GetById(id)
 }
 
-func (m *FundRequestsStore) UpdateActive(id int64, fundRequest *FundRequests) (*FundRequests, error) {
+func (s *FundRequestsStore) UpdateActive(id int64, fundRequest *FundRequests) (*FundRequests, error) {
 	query := `UPDATE fund_requests SET status = ?, updated_at = now() WHERE id = ?`
 
-	_, err := m.mysql.db.Exec(query, fundRequest.Status, id)
+	_, err := s.db.Exec(query, fundRequest.Status, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update fund request: %w", err)
 	}
 
-	updatedFundRequest, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated fund request: %w", err)
-	}
-
-	return updatedFundRequest, nil
+	return s.GetById(id)
 }

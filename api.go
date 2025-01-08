@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,50 +13,29 @@ import (
 )
 
 type APIError struct {
-	JobId   string `json:"jobid"`
+	JobID   string `json:"jobId"`
 	Message string `json:"message"`
 	Status  string `json:"status"`
 }
 
-func WriteAPISuccess(w http.ResponseWriter, v interface{}, jobID string) {
-	data, ok := v.(map[string]interface{})
+func WriteAPISuccess(w http.ResponseWriter, data interface{}, jobID string) {
+	response, ok := data.(map[string]interface{})
 	if !ok {
 		WriteJSON(w, http.StatusBadRequest, APIError{
 			Status:  "error",
-			JobId:   jobID,
-			Message: "Invalid type",
+			JobID:   jobID,
+			Message: "Invalid data type",
 		})
-
 		return
 	}
-
-	data["JobId"] = jobID
-	WriteJSON(w, http.StatusOK, v)
+	response["JobID"] = jobID
+	WriteJSON(w, http.StatusOK, response)
 }
 
-type apiFunc func(w http.ResponseWriter, r *http.Request) (interface{}, error)
-
-func WriteJSON(w http.ResponseWriter, status int, v any) error {
-	w.Header().Add("Content-Type", "application/json")
+func WriteJSON(w http.ResponseWriter, status int, data interface{}) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	return json.NewEncoder(w).Encode(v)
-}
-
-func MakeHttpHandleFunc(f apiFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		jobID := JobID()
-		r.Header.Set("jobID", jobID)
-		result, err := f(w, r)
-		if err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIError{
-				Status:  "error",
-				JobId:   jobID,
-				Message: err.Error(),
-			})
-			return
-		}
-		WriteAPISuccess(w, result, jobID)
-	}
+	return json.NewEncoder(w).Encode(data)
 }
 
 type APIServer struct {
@@ -62,9 +43,9 @@ type APIServer struct {
 	Storage    Storage
 }
 
-func NewAPIServer(listenNewAddr string, storage *Storage) *APIServer {
+func NewAPIServer(listenAddr string, storage *Storage) *APIServer {
 	return &APIServer{
-		ListenAddr: listenNewAddr,
+		ListenAddr: listenAddr,
 		Storage:    *storage,
 	}
 }
@@ -72,90 +53,143 @@ func NewAPIServer(listenNewAddr string, storage *Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
-	publicRouter := router.PathPrefix("/user").Subrouter()
-	publicRouter.HandleFunc("/login", MakeHttpHandleFunc(s.HandlerUserLogin)).Methods("POST")
+	// User routes
+	userRouter := router.PathPrefix("/user").Subrouter()
+	userRouter.HandleFunc("/login", s.prepareAndHandleRequest(s.UserLogin)).Methods("POST")
 
+	router.Use(s.testMiddleware)
+	// Budgets routes
 	budgetsRouter := router.PathPrefix("/budgets").Subrouter()
-	budgetsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetsGetData)).Methods("GET")
-	budgetsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetsCreate)).Methods("POST")
-	budgetsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetsGetDataById)).Methods("GET")
-	budgetsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetsUpdate)).Methods("PUT")
-	budgetsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetsDelete)).Methods("DELETE")
-	budgetsRouter.HandleFunc("/approve/{id}", MakeHttpHandleFunc(s.HandlerBudgetsUpdateApproveById)).Methods("PUT")
+	budgetsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgets)).Methods("GET")
+	budgetsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudget)).Methods("POST")
+	budgetsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetByID)).Methods("GET")
+	budgetsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudget)).Methods("PUT")
+	budgetsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudget)).Methods("DELETE")
+	budgetsRouter.HandleFunc("/approve/{id}", s.prepareAndHandleRequest(s.UpdateBudgetApproval)).Methods("PUT")
 
+	// Activities routes
 	activitiesRouter := router.PathPrefix("/activities").Subrouter()
-	activitiesRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerActivitiesGetData)).Methods("GET")
-	activitiesRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerActivitiesCreate)).Methods("POST")
-	activitiesRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerActivitiesGetDataById)).Methods("GET")
-	activitiesRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerActivitiesUpdate)).Methods("PUT")
-	activitiesRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerActivitiesDelete)).Methods("DELETE")
-	activitiesRouter.HandleFunc("/active/{id}", MakeHttpHandleFunc(s.HandlerActivitiesUpdateActiveById)).Methods("PUT")
+	activitiesRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllActivities)).Methods("GET")
+	activitiesRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateActivity)).Methods("POST")
+	activitiesRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetActivityByID)).Methods("GET")
+	activitiesRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateActivity)).Methods("PUT")
+	activitiesRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteActivity)).Methods("DELETE")
+	activitiesRouter.HandleFunc("/active/{id}", s.prepareAndHandleRequest(s.UpdateActivityStatusByID)).Methods("PUT")
 
+	// Budget posts routes
 	budgetPostsRouter := router.PathPrefix("/budget-posts").Subrouter()
-	budgetPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetPostsGetData)).Methods("GET")
-	budgetPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetPostsCreate)).Methods("POST")
-	budgetPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetPostsGetDataById)).Methods("GET")
-	budgetPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetPostsUpdate)).Methods("PUT")
-	budgetPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetPostsDelete)).Methods("DELETE")
-	budgetPostsRouter.HandleFunc("/active/{id}", MakeHttpHandleFunc(s.HandlerBudgetPostsUpdateActiveById)).Methods("PUT")
+	budgetPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetPosts)).Methods("GET")
+	budgetPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetPost)).Methods("POST")
+	budgetPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetPostByID)).Methods("GET")
+	budgetPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudgetPost)).Methods("PUT")
+	budgetPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudgetPost)).Methods("DELETE")
+	budgetPostsRouter.HandleFunc("/active/{id}", s.prepareAndHandleRequest(s.UpdateBudgetPostActiveByID)).Methods("PUT")
 
+	// Budget caps routes
 	budgetCapsRouter := router.PathPrefix("/budget-caps").Subrouter()
-	budgetCapsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetCapsGetData)).Methods("GET")
-	budgetCapsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetCapsCreate)).Methods("POST")
-	budgetCapsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetCapsGetDataById)).Methods("GET")
-	budgetCapsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetCapsUpdate)).Methods("PUT")
-	budgetCapsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetCapsDelete)).Methods("DELETE")
+	budgetCapsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetCaps)).Methods("GET")
+	budgetCapsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetCap)).Methods("POST")
+	budgetCapsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetCapByID)).Methods("GET")
+	budgetCapsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudgetCap)).Methods("PUT")
+	budgetCapsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudgetCap)).Methods("DELETE")
 
+	// Budget details routes
 	budgetDetailsRouter := router.PathPrefix("/budget-details").Subrouter()
-	budgetDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsGetData)).Methods("GET")
-	budgetDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsCreate)).Methods("POST")
-	budgetDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsGetDataById)).Methods("GET")
-	budgetDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsUpdate)).Methods("PUT")
-	budgetDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsDelete)).Methods("DELETE")
+	budgetDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetails)).Methods("GET")
+	budgetDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetail)).Methods("POST")
+	budgetDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailByID)).Methods("GET")
+	budgetDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudgetDetail)).Methods("PUT")
+	budgetDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudgetDetail)).Methods("DELETE")
 
+	// Budget details posts routes
 	budgetDetailsPostsRouter := router.PathPrefix("/budget-details-posts").Subrouter()
-	budgetDetailsPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsGetData)).Methods("GET")
-	budgetDetailsPostsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsCreate)).Methods("POST")
-	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsGetDataById)).Methods("GET")
-	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsUpdate)).Methods("PUT")
-	budgetDetailsPostsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsDelete)).Methods("DELETE")
+	budgetDetailsPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetailPosts)).Methods("GET")
+	budgetDetailsPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetailPost)).Methods("POST")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailPostByID)).Methods("GET")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudgetDetailPost)).Methods("PUT")
+	budgetDetailsPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudgetDetailPost)).Methods("DELETE")
 
+	// Fund requests routes
 	fundRequestsRouter := router.PathPrefix("/fund-requests").Subrouter()
-	fundRequestsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestsGetData)).Methods("GET")
-	fundRequestsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestsCreate)).Methods("POST")
-	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsGetDataById)).Methods("GET")
-	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsUpdate)).Methods("PUT")
-	fundRequestsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestsDelete)).Methods("DELETE")
+	fundRequestsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllFundRequests)).Methods("GET")
+	fundRequestsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateFundRequest)).Methods("POST")
+	fundRequestsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetFundRequestByID)).Methods("GET")
+	fundRequestsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateFundRequest)).Methods("PUT")
+	fundRequestsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteFundRequest)).Methods("DELETE")
 
+	// Fund request details routes
 	fundRequestDetailsRouter := router.PathPrefix("/fund-request-details").Subrouter()
-	fundRequestDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestDetailsGetData)).Methods("GET")
-	fundRequestDetailsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerFundRequestDetailsCreate)).Methods("POST")
-	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsGetDataById)).Methods("GET")
-	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsUpdate)).Methods("PUT")
-	fundRequestDetailsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerFundRequestDetailsDelete)).Methods("DELETE")
+	fundRequestDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllFundRequestDetails)).Methods("GET")
+	fundRequestDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateFundRequestDetail)).Methods("POST")
+	fundRequestDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetFundRequestDetailByID)).Methods("GET")
+	fundRequestDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateFundRequestDetail)).Methods("PUT")
+	fundRequestDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteFundRequestDetail)).Methods("DELETE")
 
-	budgetDetailsPostsRecommendationsRouter := router.PathPrefix("/budget-details-posts-recommendations").Subrouter()
-	budgetDetailsPostsRecommendationsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsGetData)).Methods("GET")
-	budgetDetailsPostsRecommendationsRouter.HandleFunc("", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsCreate)).Methods("POST")
-	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsGetDataById)).Methods("GET")
-	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsUpdate)).Methods("PUT")
-	budgetDetailsPostsRecommendationsRouter.HandleFunc("/{id}", MakeHttpHandleFunc(s.HandlerBudgetDetailsPostsRecommendationsDelete)).Methods("DELETE")
+	// Budget details posts recommendations routes
+	budgetDetailsPostsRecsRouter := router.PathPrefix("/budget-details-posts-recommendations").Subrouter()
+	budgetDetailsPostsRecsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetailPostRecs)).Methods("GET")
+	budgetDetailsPostsRecsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetailPostRec)).Methods("POST")
+	budgetDetailsPostsRecsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailPostRecByID)).Methods("GET")
+	budgetDetailsPostsRecsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.UpdateBudgetDetailPostRec)).Methods("PUT")
+	budgetDetailsPostsRecsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.DeleteBudgetDetailPostRec)).Methods("DELETE")
 
+	// Handle not found and method not allowed routes
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		jobID := r.Header.Get("jobID")
+		WriteJSON(w, http.StatusBadRequest, APIError{
+			Status:  "error",
+			JobID:   jobID,
+			Message: "Method Not Allowed",
+		})
 	})
 
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Page Not Found", http.StatusNotFound)
+		jobID := r.Header.Get("jobID")
+		WriteJSON(w, http.StatusBadRequest, APIError{
+			Status:  "error",
+			JobID:   jobID,
+			Message: "Page Not found",
+		})
 	})
 
 	log.Fatal(http.ListenAndServe(s.ListenAddr, router))
 }
 
-func (s *APIServer) SetJobID(next http.Handler) http.Handler {
+func (s *APIServer) testMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// AppLog("test middleware")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *APIServer) prepareAndHandleRequest(handlerFunc func(http.ResponseWriter, *http.Request, []byte, map[string]interface{}) (interface{}, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		AppLog("test middleware")
+		jobID := JobID()
+		r.Header.Set("JobID", jobID)
+
+		bodyBytes, requestLog, err := s.prepareRequest(r)
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: err.Error(),
+			})
+			return
+		}
+
+		data, err := handlerFunc(w, r, bodyBytes, requestLog)
+		if err != nil {
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: err.Error(),
+			})
+			return
+		}
+
+		WriteAPISuccess(w, data, jobID)
+	}
 }
 
 func (s *APIServer) prepareRequest(r *http.Request) ([]byte, map[string]interface{}, error) {
@@ -168,10 +202,21 @@ func (s *APIServer) prepareRequest(r *http.Request) ([]byte, map[string]interfac
 }
 
 func (s *APIServer) GetID(r *http.Request) (int64, error) {
-	strId := mux.Vars(r)["id"]
-	id, err := strconv.ParseInt(strId, 10, 64)
+	strID := mux.Vars(r)["id"]
+	id, err := strconv.ParseInt(strID, 10, 64)
 	if err != nil {
-		return id, fmt.Errorf("invalid id given %s", strId)
+		return id, fmt.Errorf("invalid ID : %s", strID)
 	}
 	return id, nil
+}
+
+func ReadAndRestoreRequestBody(r *http.Request) ([]byte, error) {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	return bodyBytes, nil
 }

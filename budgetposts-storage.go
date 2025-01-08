@@ -10,40 +10,37 @@ type BudgetPostsStorage interface {
 	Delete(int64) (*BudgetPosts, error)
 	Update(int64, *BudgetPosts) (*BudgetPosts, error)
 	UpdateActive(int64, *BudgetPosts) (*BudgetPosts, error)
-	GetDataId(int64) (*BudgetPosts, error)
-	GetData() ([]*BudgetPosts, error)
-	GetIdByName(string) (*BudgetPosts, error)
+	GetById(int64) (*BudgetPosts, error)
+	GetAll() ([]*BudgetPosts, error)
+	GetByName(string) (*BudgetPosts, error)
 }
 
 type BudgetPostsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewBudgetPostsStorage(db *MysqlDB) *BudgetPostsStore {
-	return &BudgetPostsStore{
-		mysql: db,
-	}
+func NewBudgetPostsStorage(db *sql.DB) *BudgetPostsStore {
+	return &BudgetPostsStore{db: db}
 }
 
-func (m *BudgetPostsStore) GetIdByName(name string) (*BudgetPosts, error) {
+func (s *BudgetPostsStore) GetByName(name string) (*BudgetPosts, error) {
 	query := `SELECT id, name, description, is_active, created_at, updated_at FROM budget_posts WHERE name = ?`
-	row := m.mysql.db.QueryRow(query, name)
+	row := s.db.QueryRow(query, name)
 
-	budgetPosts := &BudgetPosts{}
-	err := row.Scan(&budgetPosts.ID, &budgetPosts.Name, &budgetPosts.Description, &budgetPosts.IsActive, &budgetPosts.CreatedAt, &budgetPosts.UpdatedAt)
+	budgetPost := &BudgetPosts{}
+	err := row.Scan(&budgetPost.ID, &budgetPost.Name, &budgetPost.Description, &budgetPost.IsActive, &budgetPost.CreatedAt, &budgetPost.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-
 		return nil, fmt.Errorf("failed to get budget post by name: %w", err)
 	}
-	return budgetPosts, nil
+	return budgetPost, nil
 }
 
-func (m *BudgetPostsStore) GetData() ([]*BudgetPosts, error) {
+func (s *BudgetPostsStore) GetAll() ([]*BudgetPosts, error) {
 	query := `SELECT id, name, description, is_active, created_at, updated_at FROM budget_posts`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budget posts: %w", err)
 	}
@@ -51,49 +48,42 @@ func (m *BudgetPostsStore) GetData() ([]*BudgetPosts, error) {
 
 	var budgetPostsList []*BudgetPosts
 	for rows.Next() {
-		budgetPosts := &BudgetPosts{}
-		err := rows.Scan(
-			&budgetPosts.ID,
-			&budgetPosts.Name,
-			&budgetPosts.Description,
-			&budgetPosts.IsActive,
-			&budgetPosts.CreatedAt,
-			&budgetPosts.UpdatedAt,
-		)
+		budgetPost := &BudgetPosts{}
+		err := rows.Scan(&budgetPost.ID, &budgetPost.Name, &budgetPost.Description, &budgetPost.IsActive, &budgetPost.CreatedAt, &budgetPost.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan budget post: %w", err)
 		}
-		budgetPostsList = append(budgetPostsList, budgetPosts)
+		budgetPostsList = append(budgetPostsList, budgetPost)
 	}
 	return budgetPostsList, nil
 }
 
-func (m *BudgetPostsStore) GetDataId(id int64) (*BudgetPosts, error) {
+func (s *BudgetPostsStore) GetById(id int64) (*BudgetPosts, error) {
 	query := `SELECT id, name, description, is_active, created_at, updated_at FROM budget_posts WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
-	budgetPosts := &BudgetPosts{}
-	err := row.Scan(&budgetPosts.ID, &budgetPosts.Name, &budgetPosts.Description, &budgetPosts.IsActive, &budgetPosts.CreatedAt, &budgetPosts.UpdatedAt)
+	budgetPost := &BudgetPosts{}
+	err := row.Scan(&budgetPost.ID, &budgetPost.Name, &budgetPost.Description, &budgetPost.IsActive, &budgetPost.CreatedAt, &budgetPost.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get budget post by id: %w", err)
 	}
-	return budgetPosts, nil
+	return budgetPost, nil
 }
 
-func (m *BudgetPostsStore) Create(budgetPosts *BudgetPosts) (*BudgetPosts, error) {
-	budgetPostsByName, err := m.GetIdByName(budgetPosts.Name)
+func (s *BudgetPostsStore) Create(budgetPost *BudgetPosts) (*BudgetPosts, error) {
+	existingBudgetPost, err := s.GetByName(budgetPost.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error checking name: %w", err)
 	}
-	if budgetPostsByName != nil {
-		return budgetPostsByName, fmt.Errorf("name already in use")
+	if existingBudgetPost != nil {
+		return existingBudgetPost, fmt.Errorf("name already in use")
 	}
 
 	query := `INSERT INTO budget_posts (name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, budgetPosts.Name, budgetPosts.Description, budgetPosts.IsActive)
+	result, err := s.db.Exec(query, budgetPost.Name, budgetPost.Description, budgetPost.IsActive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert budget post: %w", err)
 	}
@@ -101,60 +91,48 @@ func (m *BudgetPostsStore) Create(budgetPosts *BudgetPosts) (*BudgetPosts, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newBudgetPosts, err := m.GetDataId(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new budget post: %w", err)
-	}
-
-	return newBudgetPosts, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *BudgetPostsStore) Delete(id int64) (*BudgetPosts, error) {
-	deletedBudgetPosts, _ := m.GetDataId(id)
+func (s *BudgetPostsStore) Delete(id int64) (*BudgetPosts, error) {
+	budgetPost, _ := s.GetById(id)
+	if budgetPost == nil {
+		return nil, fmt.Errorf("budget post not found")
+	}
 
 	query := `DELETE FROM budget_posts WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete budget post: %w", err)
 	}
 
-	return deletedBudgetPosts, nil
+	return budgetPost, nil
 }
 
-func (m *BudgetPostsStore) Update(id int64, budgetPosts *BudgetPosts) (*BudgetPosts, error) {
-	budgetPostsByName, err := m.GetIdByName(budgetPosts.Name)
+func (s *BudgetPostsStore) Update(id int64, budgetPost *BudgetPosts) (*BudgetPosts, error) {
+	existingBudgetPost, err := s.GetByName(budgetPost.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error checking name: %w", err)
 	}
-	if budgetPostsByName != nil && budgetPostsByName.ID != id {
-		return budgetPostsByName, fmt.Errorf("name already in use")
+	if existingBudgetPost != nil && existingBudgetPost.ID != id {
+		return existingBudgetPost, fmt.Errorf("name already in use")
 	}
 
 	query := `UPDATE budget_posts SET name = ?, description = ?, is_active = ?, updated_at = now() WHERE id = ?`
-	_, err = m.mysql.db.Exec(query, budgetPosts.Name, budgetPosts.Description, budgetPosts.IsActive, id)
+	_, err = s.db.Exec(query, budgetPost.Name, budgetPost.Description, budgetPost.IsActive, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget post: %w", err)
 	}
 
-	updatedBudgetPosts, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget post: %w", err)
-	}
-
-	return updatedBudgetPosts, nil
+	return s.GetById(id)
 }
 
-func (m *BudgetPostsStore) UpdateActive(id int64, budgetPosts *BudgetPosts) (*BudgetPosts, error) {
+func (s *BudgetPostsStore) UpdateActive(id int64, budgetPost *BudgetPosts) (*BudgetPosts, error) {
 	query := `UPDATE budget_posts SET is_active = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgetPosts.IsActive, id)
+	_, err := s.db.Exec(query, budgetPost.IsActive, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget post: %w", err)
 	}
 
-	updatedBudgetPosts, err := m.GetDataId(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget post: %w", err)
-	}
-
-	return updatedBudgetPosts, nil
+	return s.GetById(id)
 }

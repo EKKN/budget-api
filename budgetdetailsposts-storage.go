@@ -9,23 +9,23 @@ type BudgetDetailsPostsStorage interface {
 	Create(*BudgetDetailsPosts) (*BudgetDetailsPosts, error)
 	Delete(int64) (*BudgetDetailsPosts, error)
 	Update(int64, *BudgetDetailsPosts) (*BudgetDetailsPosts, error)
-	GetDataByID(int64) (*BudgetDetailsPosts, error)
-	GetData() ([]*BudgetDetailsPosts, error)
+	GetById(int64) (*BudgetDetailsPosts, error)
+	GetAll() ([]*BudgetDetailsPosts, error)
 }
 
 type BudgetDetailsPostsStore struct {
-	mysql *MysqlDB
+	db *sql.DB
 }
 
-func NewBudgetDetailsPostsStorage(db *MysqlDB) *BudgetDetailsPostsStore {
+func NewBudgetDetailsPostsStorage(db *sql.DB) *BudgetDetailsPostsStore {
 	return &BudgetDetailsPostsStore{
-		mysql: db,
+		db: db,
 	}
 }
 
-func (m *BudgetDetailsPostsStore) GetData() ([]*BudgetDetailsPosts, error) {
+func (s *BudgetDetailsPostsStore) GetAll() ([]*BudgetDetailsPosts, error) {
 	query := `SELECT id, budget_details_id, budget_posts_id, planned_amount, approved_amount, usage_amount, created_at, updated_at FROM budget_details_posts`
-	rows, err := m.mysql.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get budget details posts: %w", err)
 	}
@@ -52,9 +52,9 @@ func (m *BudgetDetailsPostsStore) GetData() ([]*BudgetDetailsPosts, error) {
 	return budgetDetailsPostsList, nil
 }
 
-func (m *BudgetDetailsPostsStore) GetDataByID(id int64) (*BudgetDetailsPosts, error) {
+func (s *BudgetDetailsPostsStore) GetById(id int64) (*BudgetDetailsPosts, error) {
 	query := `SELECT id, budget_details_id, budget_posts_id, planned_amount, approved_amount, usage_amount, created_at, updated_at FROM budget_details_posts WHERE id = ?`
-	row := m.mysql.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
 	budgetDetailsPost := &BudgetDetailsPosts{}
 	err := row.Scan(
@@ -76,9 +76,9 @@ func (m *BudgetDetailsPostsStore) GetDataByID(id int64) (*BudgetDetailsPosts, er
 	return budgetDetailsPost, nil
 }
 
-func (m *BudgetDetailsPostsStore) Create(budgetDetailsPost *BudgetDetailsPosts) (*BudgetDetailsPosts, error) {
+func (s *BudgetDetailsPostsStore) Create(post *BudgetDetailsPosts) (*BudgetDetailsPosts, error) {
 	query := `INSERT INTO budget_details_posts (budget_details_id, budget_posts_id, planned_amount, approved_amount, usage_amount, created_at, updated_at) VALUES (?, ?, ?, ?, ?, now(), now())`
-	result, err := m.mysql.db.Exec(query, budgetDetailsPost.BudgetDetailsID, budgetDetailsPost.BudgetPostsID, budgetDetailsPost.PlannedAmount, budgetDetailsPost.ApprovedAmount, budgetDetailsPost.UsageAmount)
+	result, err := s.db.Exec(query, post.BudgetDetailsID, post.BudgetPostsID, post.PlannedAmount, post.ApprovedAmount, post.UsageAmount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert budget details post: %w", err)
 	}
@@ -86,37 +86,27 @@ func (m *BudgetDetailsPostsStore) Create(budgetDetailsPost *BudgetDetailsPosts) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last insert id: %w", err)
 	}
-	newBudgetDetailsPost, err := m.GetDataByID(lastInsertID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get new budget details post: %w", err)
-	}
-
-	return newBudgetDetailsPost, nil
+	return s.GetById(lastInsertID)
 }
 
-func (m *BudgetDetailsPostsStore) Delete(id int64) (*BudgetDetailsPosts, error) {
-	deletedBudgetDetailsPost, _ := m.GetDataByID(id)
-
+func (s *BudgetDetailsPostsStore) Delete(id int64) (*BudgetDetailsPosts, error) {
+	post, _ := s.GetById(id)
+	if post == nil {
+		return nil, fmt.Errorf("budget details post not found")
+	}
 	query := `DELETE FROM budget_details_posts WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, id)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete budget details post: %w", err)
 	}
-
-	return deletedBudgetDetailsPost, nil
+	return post, nil
 }
 
-func (m *BudgetDetailsPostsStore) Update(id int64, budgetDetailsPost *BudgetDetailsPosts) (*BudgetDetailsPosts, error) {
+func (s *BudgetDetailsPostsStore) Update(id int64, post *BudgetDetailsPosts) (*BudgetDetailsPosts, error) {
 	query := `UPDATE budget_details_posts SET budget_details_id = ?, budget_posts_id = ?, planned_amount = ?, approved_amount = ?, usage_amount = ?, updated_at = now() WHERE id = ?`
-	_, err := m.mysql.db.Exec(query, budgetDetailsPost.BudgetDetailsID, budgetDetailsPost.BudgetPostsID, budgetDetailsPost.PlannedAmount, budgetDetailsPost.ApprovedAmount, budgetDetailsPost.UsageAmount, id)
+	_, err := s.db.Exec(query, post.BudgetDetailsID, post.BudgetPostsID, post.PlannedAmount, post.ApprovedAmount, post.UsageAmount, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update budget details post: %w", err)
 	}
-
-	updatedBudgetDetailsPost, err := m.GetDataByID(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch updated budget details post: %w", err)
-	}
-
-	return updatedBudgetDetailsPost, nil
+	return s.GetById(id)
 }
