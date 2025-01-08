@@ -1,1 +1,2 @@
-# budget-api
+# budgeting
+Budgeting in general
