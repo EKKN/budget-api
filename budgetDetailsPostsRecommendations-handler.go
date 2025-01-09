@@ -21,8 +21,7 @@ func validateBudgetDetailsPostsRecommendationsRequest(reqBody *BudgetDetailsPost
 func (s *APIServer) checkBDPRForeignKey(primaryKey *PrimaryKeyID) (string, error) {
 
 	newPrimaryKey := &PrimaryKeyID{
-		BudgetDetailsID: primaryKey.BudgetDetailsID,
-		BudgetPostsID:   primaryKey.BudgetPostsID,
+		BudgetDetailsPostsID: primaryKey.BudgetDetailsPostsID,
 	}
 
 	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)

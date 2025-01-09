@@ -22,6 +22,34 @@ func validateFundRequestDetailsRequest(reqBody *FundRequestDetails) error {
 	return nil
 }
 
+func (s *APIServer) checkFundRequestDetailsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+
+	newPrimaryKey := &PrimaryKeyID{
+		ActivitiesID:    primaryKey.ActivitiesID,
+		FundRequestsID:  primaryKey.FundRequestsID,
+		BudgetDetailsID: primaryKey.BudgetDetailsID,
+	}
+
+	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	if err != nil {
+		return "error DB", err
+	}
+
+	if primaryKeyID.ActivitiesID == 0 {
+		return "data activities not found", fmt.Errorf("data activities not found")
+	}
+
+	if primaryKeyID.FundRequestsID == 0 {
+		return "data fund request not found", fmt.Errorf("data fund request not found")
+	}
+
+	if primaryKeyID.BudgetDetailsID == 0 {
+		return "data fund request not found", fmt.Errorf("data budget details not found")
+	}
+
+	return "ok", nil
+}
+
 func (s *APIServer) GetAllFundRequestDetails(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	fundRequestDetails, err := s.Storage.FundRequestDetailsStorage.GetAll()
@@ -47,33 +75,6 @@ func (s *APIServer) GetFundRequestDetailByID(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (s *APIServer) checkFundRequestDetailsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
-
-	newPrimaryKey := &PrimaryKeyID{
-		ActivitiesID:    primaryKey.ActivitiesID,
-		FundRequestsID:  primaryKey.FundRequestsID,
-		BudgetDetailsID: primaryKey.BudgetDetailsID,
-	}
-
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
-	if err != nil {
-		return "error DB", err
-	}
-
-	if primaryKeyID.ActivitiesID == 0 {
-		return "data activities not found", nil
-	}
-
-	if primaryKeyID.FundRequestsID == 0 {
-		return "data fund request not found", nil
-	}
-
-	if primaryKeyID.BudgetDetailsID == 0 {
-		return "data budget details not found", nil
-	}
-
-	return "ok", nil
-}
 func (s *APIServer) CreateFundRequestDetail(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	reqBody := &FundRequestDetails{}

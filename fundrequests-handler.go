@@ -34,7 +34,8 @@ func (s *APIServer) checkFundRequestsForeignKey(primaryKey *PrimaryKeyID) (strin
 	}
 
 	if primaryKeyID.BudgetPostsID == 0 {
-		return "data budgetposts not found", nil
+		return "data activities not found", fmt.Errorf("data budgetposts not found")
+
 	}
 	return "ok", nil
 }
