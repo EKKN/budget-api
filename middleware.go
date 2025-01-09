@@ -10,9 +10,17 @@ import (
 func (s *APIServer) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get the token from the Authorization header
+		_, requestLog, _ := s.prepareRequest(r)
+		jobID := r.Header.Get("jobID")
 		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+
+			AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": "Authorization required"}))
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: "Authorization required",
+			})
 			return
 		}
 
@@ -22,20 +30,37 @@ func (s *APIServer) Authenticate(next http.Handler) http.Handler {
 		// Validate the token
 		token, err := validateJWT(tokenString)
 		if err != nil {
-			http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+
+			AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": "invalid token" + err.Error()}))
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: "Invalid token",
+			})
 			return
 		}
 
 		// Check if token is valid
 		if !token.Valid {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": "invalid token"}))
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: "Invalid token",
+			})
 			return
 		}
 
 		// Set the token claims in the request context
 		claims, ok := token.Claims.(*UserClaims)
 		if !ok || !token.Valid {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": "Invalid token claims"}))
+			WriteJSON(w, http.StatusBadRequest, APIError{
+				Status:  "error",
+				JobID:   jobID,
+				Message: "Invalid token claims",
+			})
+
 			return
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, claims)

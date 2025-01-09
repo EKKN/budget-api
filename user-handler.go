@@ -28,10 +28,16 @@ func (s *APIServer) UserLogin(w http.ResponseWriter, r *http.Request, bodyBytes 
 		return respondWithError(requestLog, "error creating JWT", err)
 	}
 
-	responseLog := map[string]interface{}{
-		"status": "success",
-		"token":  tokenJwt,
+	// Remove sensitive information
+	sanitizedUser := Users{
+		ID:       user.ID,
+		UserID:   user.UserID,
+		Password: "***",
 	}
 
-	return respondWithSuccessStruct(requestLog, responseLog)
+	return respondWithSuccessStruct(requestLog, map[string]interface{}{
+		"status": "success",
+		"user":   sanitizedUser,
+		"token":  tokenJwt,
+	})
 }

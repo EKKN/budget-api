@@ -193,15 +193,18 @@ func LogResponseSuccess(data interface{}) map[string]interface{} {
 }
 
 func LogResponseSuccessMap(responseLog map[string]interface{}) map[string]interface{} {
-	sensitiveKeys := []string{"token", "pwd", "password"}
+	sensitiveKeys := map[string]bool{"token": true, "pwd": true, "password": true}
 
-	for _, key := range sensitiveKeys {
-		if _, exists := responseLog[key]; exists {
-			responseLog[key] = "***"
+	response := make(map[string]interface{})
+	for k, v := range responseLog {
+		if _, exists := sensitiveKeys[k]; exists {
+			response[k] = "*"
+		} else {
+			response[k] = v
 		}
 	}
 
-	return responseLog
+	return response
 }
 
 func LogRequestResponse(requestLog, responseLog map[string]interface{}) string {
@@ -224,7 +227,11 @@ func respondWithError(requestLog map[string]interface{}, message string, err err
 	emptyErr := fmt.Sprintf("%s: %v", message, err)
 	if err == nil {
 		emptyErr = message
+	} else if message == err.Error() {
+		emptyErr = message
 	}
+
+	AppLog("ini apa", emptyErr)
 	responseLog := LogResponseError("error", emptyErr)
 	AppLog(LogRequestResponse(requestLog, responseLog))
 	return nil, fmt.Errorf("%s", message)
@@ -237,6 +244,7 @@ func respondWithSuccess(requestLog map[string]interface{}, data interface{}) (in
 }
 
 func respondWithSuccessStruct(requestLog map[string]interface{}, mapData map[string]interface{}) (interface{}, error) {
-	AppLog(LogRequestResponse(requestLog, mapData))
+	checkMapData := LogResponseSuccessMap(mapData)
+	AppLog(LogRequestResponse(requestLog, checkMapData))
 	return mapData, nil
 }

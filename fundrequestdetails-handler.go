@@ -47,6 +47,33 @@ func (s *APIServer) GetFundRequestDetailByID(w http.ResponseWriter, r *http.Requ
 
 }
 
+func (s *APIServer) checkFundRequestDetailsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+
+	newPrimaryKey := &PrimaryKeyID{
+		ActivitiesID:    primaryKey.ActivitiesID,
+		FundRequestsID:  primaryKey.FundRequestsID,
+		BudgetDetailsID: primaryKey.BudgetDetailsID,
+	}
+
+	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	if err != nil {
+		return "error DB", err
+	}
+
+	if primaryKeyID.ActivitiesID == 0 {
+		return "data activities not found", nil
+	}
+
+	if primaryKeyID.FundRequestsID == 0 {
+		return "data fund request not found", nil
+	}
+
+	if primaryKeyID.BudgetDetailsID == 0 {
+		return "data budget details not found", nil
+	}
+
+	return "ok", nil
+}
 func (s *APIServer) CreateFundRequestDetail(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	reqBody := &FundRequestDetails{}
@@ -58,27 +85,15 @@ func (s *APIServer) CreateFundRequestDetail(w http.ResponseWriter, r *http.Reque
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKeyID := &PrimaryKeyID{
+	newPrimaryKey := &PrimaryKeyID{
 		ActivitiesID:    reqBody.ActivitiesID,
 		FundRequestsID:  reqBody.FundRequestsID,
 		BudgetDetailsID: reqBody.BudgetDetailsID,
 	}
 
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKeyID)
+	message, err := s.checkFundRequestDetailsForeignKey(newPrimaryKey)
 	if err != nil {
-		return respondWithError(requestLog, "database error", err)
-	}
-
-	if primaryKeyID.ActivitiesID == 0 {
-		return respondWithError(requestLog, "data activities not found", fmt.Errorf("data activities not found"))
-	}
-
-	if primaryKeyID.FundRequestsID == 0 {
-		return respondWithError(requestLog, "data fund request not found", fmt.Errorf("data fund request not found"))
-	}
-
-	if primaryKeyID.BudgetDetailsID == 0 {
-		return respondWithError(requestLog, "data budget details not found", fmt.Errorf("data budget details not found"))
+		return respondWithError(requestLog, message, err)
 	}
 
 	fundRequestDetail, err := s.Storage.FundRequestDetailsStorage.Create(reqBody)
@@ -106,34 +121,24 @@ func (s *APIServer) UpdateFundRequestDetail(w http.ResponseWriter, r *http.Reque
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKeyID := &PrimaryKeyID{
+	newPrimaryKey := &PrimaryKeyID{
 		ActivitiesID:    reqBody.ActivitiesID,
 		FundRequestsID:  reqBody.FundRequestsID,
 		BudgetDetailsID: reqBody.BudgetDetailsID,
 	}
 
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKeyID)
+	message, err := s.checkFundRequestDetailsForeignKey(newPrimaryKey)
 	if err != nil {
-		return respondWithError(requestLog, "database error", err)
-	}
-
-	if primaryKeyID.ActivitiesID == 0 {
-		return respondWithError(requestLog, "data activities not found", fmt.Errorf("data activities not found"))
-	}
-
-	if primaryKeyID.FundRequestsID == 0 {
-		return respondWithError(requestLog, "data fund request not found", fmt.Errorf("data fund request not found"))
-	}
-
-	if primaryKeyID.BudgetDetailsID == 0 {
-		return respondWithError(requestLog, "data budget details not found", fmt.Errorf("data budget details not found"))
+		return respondWithError(requestLog, message, err)
 	}
 
 	updatedFundRequestDetail, err := s.Storage.FundRequestDetailsStorage.Update(id, reqBody)
-	if err != nil || updatedFundRequestDetail == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-
+	if updatedFundRequestDetail == nil {
+		return respondWithError(requestLog, "data fund request not found", err)
+	}
 	return respondWithSuccess(requestLog, updatedFundRequestDetail)
 
 }
@@ -146,10 +151,12 @@ func (s *APIServer) DeleteFundRequestDetail(w http.ResponseWriter, r *http.Reque
 	}
 
 	deletedFundRequestDetail, err := s.Storage.FundRequestDetailsStorage.Delete(id)
-	if err != nil || deletedFundRequestDetail == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-
+	if deletedFundRequestDetail == nil {
+		return respondWithError(requestLog, "data fund request not found", err)
+	}
 	return respondWithSuccess(requestLog, deletedFundRequestDetail)
 
 }

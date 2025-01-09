@@ -53,13 +53,14 @@ func NewAPIServer(listenAddr string, storage *Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
+	router.Use(s.addJobid)
 	// User routes
 	userRouter := router.PathPrefix("/user").Subrouter()
 	userRouter.HandleFunc("/login", s.prepareAndHandleRequest(s.UserLogin)).Methods("POST")
 
-	router.Use(s.testMiddleware)
 	// Budgets routes
 	budgetsRouter := router.PathPrefix("/budgets").Subrouter()
+	budgetsRouter.Use(s.Authenticate)
 	budgetsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgets)).Methods("GET")
 	budgetsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudget)).Methods("POST")
 	budgetsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetByID)).Methods("GET")
@@ -69,6 +70,7 @@ func (s *APIServer) Run() {
 
 	// Activities routes
 	activitiesRouter := router.PathPrefix("/activities").Subrouter()
+	activitiesRouter.Use(s.Authenticate)
 	activitiesRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllActivities)).Methods("GET")
 	activitiesRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateActivity)).Methods("POST")
 	activitiesRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetActivityByID)).Methods("GET")
@@ -78,6 +80,7 @@ func (s *APIServer) Run() {
 
 	// Budget posts routes
 	budgetPostsRouter := router.PathPrefix("/budget-posts").Subrouter()
+	budgetPostsRouter.Use(s.Authenticate)
 	budgetPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetPosts)).Methods("GET")
 	budgetPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetPost)).Methods("POST")
 	budgetPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetPostByID)).Methods("GET")
@@ -87,6 +90,7 @@ func (s *APIServer) Run() {
 
 	// Budget caps routes
 	budgetCapsRouter := router.PathPrefix("/budget-caps").Subrouter()
+	budgetCapsRouter.Use(s.Authenticate)
 	budgetCapsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetCaps)).Methods("GET")
 	budgetCapsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetCap)).Methods("POST")
 	budgetCapsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetCapByID)).Methods("GET")
@@ -95,6 +99,7 @@ func (s *APIServer) Run() {
 
 	// Budget details routes
 	budgetDetailsRouter := router.PathPrefix("/budget-details").Subrouter()
+	budgetDetailsRouter.Use(s.Authenticate)
 	budgetDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetails)).Methods("GET")
 	budgetDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetail)).Methods("POST")
 	budgetDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailByID)).Methods("GET")
@@ -103,6 +108,7 @@ func (s *APIServer) Run() {
 
 	// Budget details posts routes
 	budgetDetailsPostsRouter := router.PathPrefix("/budget-details-posts").Subrouter()
+	budgetDetailsPostsRouter.Use(s.Authenticate)
 	budgetDetailsPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetailPosts)).Methods("GET")
 	budgetDetailsPostsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetailPost)).Methods("POST")
 	budgetDetailsPostsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailPostByID)).Methods("GET")
@@ -111,6 +117,7 @@ func (s *APIServer) Run() {
 
 	// Fund requests routes
 	fundRequestsRouter := router.PathPrefix("/fund-requests").Subrouter()
+	fundRequestsRouter.Use(s.Authenticate)
 	fundRequestsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllFundRequests)).Methods("GET")
 	fundRequestsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateFundRequest)).Methods("POST")
 	fundRequestsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetFundRequestByID)).Methods("GET")
@@ -119,6 +126,7 @@ func (s *APIServer) Run() {
 
 	// Fund request details routes
 	fundRequestDetailsRouter := router.PathPrefix("/fund-request-details").Subrouter()
+	fundRequestDetailsRouter.Use(s.Authenticate)
 	fundRequestDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllFundRequestDetails)).Methods("GET")
 	fundRequestDetailsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateFundRequestDetail)).Methods("POST")
 	fundRequestDetailsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetFundRequestDetailByID)).Methods("GET")
@@ -127,6 +135,7 @@ func (s *APIServer) Run() {
 
 	// Budget details posts recommendations routes
 	budgetDetailsPostsRecsRouter := router.PathPrefix("/budget-details-posts-recommendations").Subrouter()
+	budgetDetailsPostsRecsRouter.Use(s.Authenticate)
 	budgetDetailsPostsRecsRouter.HandleFunc("", s.prepareAndHandleRequest(s.GetAllBudgetDetailPostRecs)).Methods("GET")
 	budgetDetailsPostsRecsRouter.HandleFunc("", s.prepareAndHandleRequest(s.CreateBudgetDetailPostRec)).Methods("POST")
 	budgetDetailsPostsRecsRouter.HandleFunc("/{id}", s.prepareAndHandleRequest(s.GetBudgetDetailPostRecByID)).Methods("GET")
@@ -141,6 +150,7 @@ func (s *APIServer) Run() {
 			JobID:   jobID,
 			Message: "Method Not Allowed",
 		})
+
 	})
 
 	router.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -150,26 +160,26 @@ func (s *APIServer) Run() {
 			JobID:   jobID,
 			Message: "Page Not found",
 		})
+
 	})
 
 	log.Fatal(http.ListenAndServe(s.ListenAddr, router))
 }
 
-func (s *APIServer) testMiddleware(next http.Handler) http.Handler {
+func (s *APIServer) addJobid(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// AppLog("test middleware")
+		jobID := JobID()
+		r.Header.Set("JobID", jobID)
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (s *APIServer) prepareAndHandleRequest(handlerFunc func(http.ResponseWriter, *http.Request, []byte, map[string]interface{}) (interface{}, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		AppLog("test middleware")
-		jobID := JobID()
-		r.Header.Set("JobID", jobID)
-
+		jobID := r.Header.Get("jobID")
 		bodyBytes, requestLog, err := s.prepareRequest(r)
 		if err != nil {
+			AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": err.Error()}))
 			WriteJSON(w, http.StatusBadRequest, APIError{
 				Status:  "error",
 				JobID:   jobID,
@@ -180,6 +190,7 @@ func (s *APIServer) prepareAndHandleRequest(handlerFunc func(http.ResponseWriter
 
 		data, err := handlerFunc(w, r, bodyBytes, requestLog)
 		if err != nil {
+			// AppLog(LogRequestResponse(requestLog, map[string]interface{}{"status": "error", "message": err.Error()}))
 			WriteJSON(w, http.StatusBadRequest, APIError{
 				Status:  "error",
 				JobID:   jobID,

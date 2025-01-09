@@ -98,8 +98,11 @@ func (s *APIServer) UpdateActivity(w http.ResponseWriter, r *http.Request, bodyB
 	}
 
 	updatedActivity, err := s.Storage.ActivitiesStorage.Update(id, reqBody)
-	if err != nil || updatedActivity == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+	if updatedActivity == nil {
+		return respondWithError(requestLog, "data activities not found", err)
 	}
 
 	return respondWithSuccess(requestLog, updatedActivity)
@@ -114,10 +117,12 @@ func (s *APIServer) DeleteActivity(w http.ResponseWriter, r *http.Request, bodyB
 	}
 
 	deletedActivity, err := s.Storage.ActivitiesStorage.Delete(id)
-	if err != nil || deletedActivity == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-
+	if deletedActivity == nil {
+		return respondWithError(requestLog, "data activities not found", err)
+	}
 	return respondWithSuccess(requestLog, deletedActivity)
 
 }
@@ -137,6 +142,10 @@ func (s *APIServer) UpdateActivityStatusByID(w http.ResponseWriter, r *http.Requ
 	updatedActivity, err := s.Storage.ActivitiesStorage.UpdateActive(id, reqBody)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+
+	if updatedActivity == nil {
+		return respondWithError(requestLog, "data activities not found", err)
 	}
 	return respondWithSuccess(requestLog, updatedActivity)
 

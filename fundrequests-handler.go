@@ -22,6 +22,23 @@ func validateFundRequestsRequest(reqBody *FundRequests) error {
 	return nil
 }
 
+func (s *APIServer) checkFundRequestsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: primaryKey.BudgetPostsID,
+	}
+
+	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	if err != nil {
+		return "error DB", err
+	}
+
+	if primaryKeyID.BudgetPostsID == 0 {
+		return "data budgetposts not found", nil
+	}
+	return "ok", nil
+}
+
 func (s *APIServer) GetAllFundRequests(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	fundRequest, err := s.Storage.FundRequestsStorage.GetAll()
@@ -58,15 +75,13 @@ func (s *APIServer) CreateFundRequest(w http.ResponseWriter, r *http.Request, bo
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKeyID := &PrimaryKeyID{}
-	newPrimaryKeyID.BudgetPostsID = reqBody.BudgetPostsID
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKeyID)
-	if err != nil {
-		return respondWithError(requestLog, "database error", err)
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	if primaryKeyID.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
+	message, err := s.checkFundRequestsForeignKey(newPrimaryKey)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
 	}
 
 	fundRequest, err := s.Storage.FundRequestsStorage.Create(reqBody)
@@ -94,22 +109,23 @@ func (s *APIServer) UpdateFundRequest(w http.ResponseWriter, r *http.Request, bo
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKeyID := &PrimaryKeyID{}
-	newPrimaryKeyID.BudgetPostsID = reqBody.BudgetPostsID
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKeyID)
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: reqBody.BudgetPostsID,
+	}
+
+	message, err := s.checkFundRequestsForeignKey(newPrimaryKey)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
+	updatedFundRequest, err := s.Storage.FundRequestsStorage.Update(id, reqBody)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if primaryKeyID.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
+	if updatedFundRequest == nil {
+		return respondWithError(requestLog, "data fund request not found", err)
 	}
-
-	updatedFundRequest, err := s.Storage.FundRequestsStorage.Update(id, reqBody)
-	if err != nil || updatedFundRequest == nil {
-		return respondWithError(requestLog, "database error", err)
-	}
-
 	return respondWithSuccess(requestLog, updatedFundRequest)
 
 }
@@ -122,10 +138,12 @@ func (s *APIServer) DeleteFundRequest(w http.ResponseWriter, r *http.Request, bo
 	}
 
 	deletedFundRequest, err := s.Storage.FundRequestsStorage.Delete(id)
-	if err != nil || deletedFundRequest == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-
+	if deletedFundRequest == nil {
+		return respondWithError(requestLog, "data fund request not found", err)
+	}
 	return respondWithSuccess(requestLog, deletedFundRequest)
 
 }

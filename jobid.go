@@ -38,7 +38,7 @@ func (gen *JobIDGenerator) GenerateJobID() string {
 	}
 
 	gen.sequence++
-	timestamp := now.Format("20060102.150405.000")
+	timestamp := now.Format("20060102.150405.00000")
 	jobID := strconv.Itoa(gen.sequence)
 
 	return fmt.Sprintf("%s.%s", timestamp, jobID)

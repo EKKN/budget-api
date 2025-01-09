@@ -23,6 +23,28 @@ func validateBudgetDetailsPost(reqBody *BudgetDetailsPosts) error {
 	return nil
 }
 
+func (s *APIServer) checkBudgetsDetailsPostsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetDetailsID: primaryKey.BudgetDetailsID,
+		BudgetPostsID:   primaryKey.BudgetPostsID,
+	}
+
+	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	if err != nil {
+		return "error DB", err
+	}
+
+	if primaryKey.BudgetDetailsID == 0 {
+		return "data budget details not found", fmt.Errorf("data budget details not found")
+	}
+
+	if primaryKey.BudgetPostsID == 0 {
+		return "data budget posts found", fmt.Errorf("data budget posts not found")
+	}
+	return "ok", nil
+}
+
 func (s *APIServer) GetAllBudgetDetailPosts(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	budgetDetailsPosts, err := s.Storage.BudgetDetailsPostsStorage.GetAll()
@@ -64,17 +86,9 @@ func (s *APIServer) CreateBudgetDetailPost(w http.ResponseWriter, r *http.Reques
 		BudgetPostsID:   reqBody.BudgetPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	message, err := s.checkBudgetsDetailsPostsForeignKey(newPrimaryKey)
 	if err != nil {
-		return respondWithError(requestLog, "database error", err)
-	}
-
-	if primaryKey.BudgetDetailsID == 0 {
-		return respondWithError(requestLog, "data budget details not found", fmt.Errorf("data budget details not found"))
-	}
-
-	if primaryKey.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
+		return respondWithError(requestLog, message, err)
 	}
 
 	budgetDetailsPost, err := s.Storage.BudgetDetailsPostsStorage.Create(reqBody)
@@ -107,22 +121,18 @@ func (s *APIServer) UpdateBudgetDetailPost(w http.ResponseWriter, r *http.Reques
 		BudgetPostsID:   reqBody.BudgetPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	message, err := s.checkBudgetsDetailsPostsForeignKey(newPrimaryKey)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
+	updatedBudgetDetailsPost, err := s.Storage.BudgetDetailsPostsStorage.Update(id, reqBody)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if primaryKey.BudgetDetailsID == 0 {
-		return respondWithError(requestLog, "data budget details not found", fmt.Errorf("data budget details not found"))
-	}
-
-	if primaryKey.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
-	}
-
-	updatedBudgetDetailsPost, err := s.Storage.BudgetDetailsPostsStorage.Update(id, reqBody)
-	if err != nil || updatedBudgetDetailsPost == nil {
-		return respondWithError(requestLog, "database error", err)
+	if updatedBudgetDetailsPost == nil {
+		return respondWithError(requestLog, "data budget details not found", err)
 	}
 
 	return respondWithSuccess(requestLog, updatedBudgetDetailsPost)
@@ -137,8 +147,12 @@ func (s *APIServer) DeleteBudgetDetailPost(w http.ResponseWriter, r *http.Reques
 	}
 
 	deletedBudgetDetailsPost, err := s.Storage.BudgetDetailsPostsStorage.Delete(id)
-	if err != nil || deletedBudgetDetailsPost == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+
+	if deletedBudgetDetailsPost == nil {
+		return respondWithError(requestLog, "data budget details not found", err)
 	}
 
 	return respondWithSuccess(requestLog, deletedBudgetDetailsPost)

@@ -98,10 +98,13 @@ func (s *APIServer) UpdateBudgetPost(w http.ResponseWriter, r *http.Request, bod
 	}
 
 	updatedBudgetPost, err := s.Storage.BudgetPostsStorage.Update(id, reqBody)
-	if err != nil || updatedBudgetPost == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
 
+	if updatedBudgetPost == nil {
+		return respondWithError(requestLog, "data budget posts not found", err)
+	}
 	return respondWithSuccess(requestLog, updatedBudgetPost)
 
 }
@@ -114,8 +117,12 @@ func (s *APIServer) DeleteBudgetPost(w http.ResponseWriter, r *http.Request, bod
 	}
 
 	deletedBudgetPost, err := s.Storage.BudgetPostsStorage.Delete(id)
-	if err != nil || deletedBudgetPost == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+
+	if deletedBudgetPost == nil {
+		return respondWithError(requestLog, "data budget posts not found", err)
 	}
 
 	return respondWithSuccess(requestLog, deletedBudgetPost)

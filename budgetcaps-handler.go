@@ -18,6 +18,29 @@ func validateBudgetCapsRequest(reqBody *BudgetCaps) error {
 	return nil
 }
 
+func (s *APIServer) checkBudgetsCapsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetsID:     primaryKey.BudgetsID,
+		BudgetPostsID: primaryKey.BudgetPostsID,
+	}
+
+	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	if err != nil {
+		return "error DB", err
+	}
+
+	if primaryKey.BudgetsID == 0 {
+		return "data budgets not found", fmt.Errorf("data budgets not found")
+	}
+
+	if primaryKey.BudgetPostsID == 0 {
+		return "data budget post not found", fmt.Errorf("data budget post not found")
+	}
+
+	return "ok", nil
+}
+
 func (s *APIServer) GetAllBudgetCaps(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	budgetCaps, err := s.Storage.BudgetCapsStorage.GetAll()
@@ -59,17 +82,9 @@ func (s *APIServer) CreateBudgetCap(w http.ResponseWriter, r *http.Request, body
 		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	message, err := s.checkBudgetsCapsForeignKey(newPrimaryKey)
 	if err != nil {
-		return respondWithError(requestLog, "database error", err)
-	}
-
-	if primaryKey.BudgetsID == 0 {
-		return respondWithError(requestLog, "data budgets not found", fmt.Errorf("data budgets not found"))
-	}
-
-	if primaryKey.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
+		return respondWithError(requestLog, message, err)
 	}
 
 	budgetCap, err := s.Storage.BudgetCapsStorage.Create(reqBody)
@@ -102,22 +117,17 @@ func (s *APIServer) UpdateBudgetCap(w http.ResponseWriter, r *http.Request, body
 		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	message, err := s.checkBudgetsCapsForeignKey(newPrimaryKey)
 	if err != nil {
-		return respondWithError(requestLog, "database error 2", err)
-	}
-
-	if primaryKey.BudgetsID == 0 {
-		return respondWithError(requestLog, "data budgets not found", fmt.Errorf("data budgets not found"))
-	}
-
-	if primaryKey.BudgetPostsID == 0 {
-		return respondWithError(requestLog, "data budget post not found", fmt.Errorf("data budget post not found"))
+		return respondWithError(requestLog, message, err)
 	}
 
 	updatedBudgetCap, err := s.Storage.BudgetCapsStorage.Update(id, reqBody)
-	if err != nil || updatedBudgetCap == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+	if updatedBudgetCap == nil {
+		return respondWithError(requestLog, "data budget cap not found", err)
 	}
 
 	return respondWithSuccess(requestLog, updatedBudgetCap)
@@ -132,8 +142,11 @@ func (s *APIServer) DeleteBudgetCap(w http.ResponseWriter, r *http.Request, body
 	}
 
 	deletedBudgetCap, err := s.Storage.BudgetCapsStorage.Delete(id)
-	if err != nil || deletedBudgetCap == nil {
+	if err != nil {
 		return respondWithError(requestLog, "database error", err)
+	}
+	if deletedBudgetCap == nil {
+		return respondWithError(requestLog, "data budget cap not found", err)
 	}
 
 	return respondWithSuccess(requestLog, deletedBudgetCap)

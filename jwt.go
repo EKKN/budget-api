@@ -26,7 +26,7 @@ func CreateJwt(Users *Users) (string, error) {
 	}
 
 	secret := os.Getenv("JWT_SECRET")
-
+	AppLog(secret)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 
 	tokenString, err := token.SignedString([]byte(secret))
