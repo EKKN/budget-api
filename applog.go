@@ -110,6 +110,7 @@ func (l *AppLogger) End() {
 func AppLog(v ...any) {
 	if applog == nil {
 		applog = NewLogger("./log", "log", true)
+		defer applog.End()
 	}
 	applog.WriteLine(v...)
 }
