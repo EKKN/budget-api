@@ -103,10 +103,13 @@ type BudgetDetailsPostsRecommendations struct {
 }
 
 type PrimaryKeyID struct {
-	BudgetsID            int64 `json:"budgets_id"`
-	BudgetPostsID        int64 `json:"budget_posts_id"`
-	ActivitiesID         int64 `json:"activities_id"`
-	BudgetDetailsID      int64 `json:"budget_details_id"`
-	BudgetDetailsPostsID int64 `json:"budget_details_posts_id"`
-	FundRequestsID       int64 `json:"fund_requests_id"`
+	BudgetsID                           int64 `json:"budgets_id"`
+	BudgetPostsID                       int64 `json:"budget_posts_id"`
+	ActivitiesID                        int64 `json:"activities_id"`
+	BudgetDetailsID                     int64 `json:"budget_details_id"`
+	BudgetDetailsPostsID                int64 `json:"budget_details_posts_id"`
+	FundRequestsID                      int64 `json:"fund_requests_id"`
+	BudgetDetailsPostsRecommendationsID int64 `json:"budget_details_posts_reqcomandations_id"`
+	BudgetCapsID                        int64 `json:"budget_caps_id"`
+	FundRequestDetailsID                int64 `json:"fund_request_details_id"`
 }

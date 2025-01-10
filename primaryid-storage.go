@@ -20,12 +20,15 @@ func NewPrimaryKeyIDStorage(db *sql.DB) *PrimaryKeyIDStore {
 }
 func (s *PrimaryKeyIDStore) GetPrimaryKey(primaryKey *PrimaryKeyID) (*PrimaryKeyID, error) {
 	queries := map[string]*int64{
-		"SELECT id FROM budgets WHERE id = ?":              &primaryKey.BudgetsID,
-		"SELECT id FROM budget_posts WHERE id = ?":         &primaryKey.BudgetPostsID,
-		"SELECT id FROM activities WHERE id = ?":           &primaryKey.ActivitiesID,
-		"SELECT id FROM budget_details WHERE id = ?":       &primaryKey.BudgetDetailsID,
-		"SELECT id FROM budget_details_posts WHERE id = ?": &primaryKey.BudgetDetailsPostsID,
-		"SELECT id FROM fund_requests WHERE id = ?":        &primaryKey.FundRequestsID,
+		"SELECT id FROM budgets WHERE id = ?":                              &primaryKey.BudgetsID,
+		"SELECT id FROM budget_posts WHERE id = ?":                         &primaryKey.BudgetPostsID,
+		"SELECT id FROM activities WHERE id = ?":                           &primaryKey.ActivitiesID,
+		"SELECT id FROM budget_details WHERE id = ?":                       &primaryKey.BudgetDetailsID,
+		"SELECT id FROM budget_details_posts WHERE id = ?":                 &primaryKey.BudgetDetailsPostsID,
+		"SELECT id FROM fund_requests WHERE id = ?":                        &primaryKey.FundRequestsID,
+		"SELECT id FROM budget_details_posts_recommendations WHERE id = ?": &primaryKey.BudgetDetailsPostsRecommendationsID,
+		"SELECT id FROM budget_caps WHERE id = ?":                          &primaryKey.BudgetCapsID,
+		"SELECT id FROM fund_request_details WHERE id = ?":                 &primaryKey.FundRequestDetailsID,
 	}
 
 	for query, idPtr := range queries {

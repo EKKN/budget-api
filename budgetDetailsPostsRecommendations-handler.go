@@ -18,19 +18,26 @@ func validateBudgetDetailsPostsRecommendationsRequest(reqBody *BudgetDetailsPost
 	return nil
 }
 
-func (s *APIServer) checkBDPRForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+func (s *APIServer) validateBDPRFForeignKey(primaryKey *PrimaryKeyID, validateSelfID bool, checkSelfOnly bool) (string, error) {
 
-	newPrimaryKey := &PrimaryKeyID{
-		BudgetDetailsPostsID: primaryKey.BudgetDetailsPostsID,
+	newKey := &PrimaryKeyID{
+		BudgetDetailsPostsRecommendationsID: primaryKey.BudgetDetailsPostsRecommendationsID,
+		BudgetDetailsPostsID:                primaryKey.BudgetDetailsPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	storedKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newKey)
 	if err != nil {
-		return "error DB", err
+		return "database error", err
 	}
 
-	if primaryKey.BudgetDetailsPostsID == 0 {
-		return "data budget details posts not found", fmt.Errorf("data budget details posts not found")
+	if validateSelfID && storedKey.BudgetDetailsPostsRecommendationsID == 0 {
+		return "budget detail post recommendation not found", fmt.Errorf("budget detail post recommendation not found")
+	}
+	if !checkSelfOnly {
+
+		if storedKey.BudgetDetailsPostsID == 0 {
+			return "data budget details posts not found", fmt.Errorf("data budget details posts not found")
+		}
 	}
 
 	return "ok", nil
@@ -72,10 +79,11 @@ func (s *APIServer) CreateBudgetDetailPostRec(w http.ResponseWriter, r *http.Req
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKey := &PrimaryKeyID{}
-	newPrimaryKey.BudgetDetailsPostsID = reqBody.BudgetDetailsPostsID
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetDetailsPostsID: reqBody.BudgetDetailsPostsID,
+	}
 
-	message, err := s.checkBDPRForeignKey(newPrimaryKey)
+	message, err := s.validateBDPRFForeignKey(newPrimaryKey, false, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -105,10 +113,12 @@ func (s *APIServer) UpdateBudgetDetailPostRec(w http.ResponseWriter, r *http.Req
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
-	newPrimaryKey := &PrimaryKeyID{}
-	newPrimaryKey.BudgetDetailsPostsID = id
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetDetailsPostsRecommendationsID: id,
+		BudgetDetailsPostsID:                reqBody.BudgetDetailsPostsID,
+	}
 
-	message, err := s.checkBDPRForeignKey(newPrimaryKey)
+	message, err := s.validateBDPRFForeignKey(newPrimaryKey, true, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -117,9 +127,9 @@ func (s *APIServer) UpdateBudgetDetailPostRec(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-	if updatedBudgetDetailsPostsRecommendation == nil {
-		return respondWithError(requestLog, "data budget details posts recommendation not found", err)
-	}
+	// if updatedBudgetDetailsPostsRecommendation == nil {
+	// 	return respondWithError(requestLog, "data budget details posts recommendation not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, updatedBudgetDetailsPostsRecommendation)
 
@@ -132,14 +142,23 @@ func (s *APIServer) DeleteBudgetDetailPostRec(w http.ResponseWriter, r *http.Req
 		return respondWithError(requestLog, "invalid ID", err)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetDetailsPostsRecommendationsID: id,
+	}
+
+	message, err := s.validateBDPRFForeignKey(newPrimaryKey, true, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	deletedBudgetDetailsPostsRecommendation, err := s.Storage.BudgetDetailPostRecStorage.Delete(id)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if deletedBudgetDetailsPostsRecommendation == nil {
-		return respondWithError(requestLog, "data budget details posts recommendation not found", err)
-	}
+	// if deletedBudgetDetailsPostsRecommendation == nil {
+	// 	return respondWithError(requestLog, "data budget details posts recommendation not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, deletedBudgetDetailsPostsRecommendation)
 

@@ -18,24 +18,31 @@ func validateBudgetCapsRequest(reqBody *BudgetCaps) error {
 	return nil
 }
 
-func (s *APIServer) checkBudgetsCapsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+func (s *APIServer) validateBudgetsCapsForeignKey(primaryKey *PrimaryKeyID, validateSelfID bool, checkSelfOnly bool) (string, error) {
 
-	newPrimaryKey := &PrimaryKeyID{
+	newKey := &PrimaryKeyID{
+		BudgetCapsID:  primaryKey.BudgetCapsID,
 		BudgetsID:     primaryKey.BudgetsID,
 		BudgetPostsID: primaryKey.BudgetPostsID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	storedKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newKey)
 	if err != nil {
-		return "error DB", err
+		return "database error", err
 	}
 
-	if primaryKey.BudgetsID == 0 {
-		return "data budgets not found", fmt.Errorf("data budgets not found")
+	if validateSelfID && storedKey.BudgetCapsID == 0 {
+		return "budget caps not found", fmt.Errorf("budget caps not found")
 	}
 
-	if primaryKey.BudgetPostsID == 0 {
-		return "data budget post not found", fmt.Errorf("data budget post not found")
+	if !checkSelfOnly {
+		if storedKey.BudgetsID == 0 {
+			return "data budgets not found", fmt.Errorf("data budgets not found")
+		}
+
+		if storedKey.BudgetPostsID == 0 {
+			return "data budget post not found", fmt.Errorf("data budget post not found")
+		}
 	}
 
 	return "ok", nil
@@ -82,7 +89,7 @@ func (s *APIServer) CreateBudgetCap(w http.ResponseWriter, r *http.Request, body
 		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	message, err := s.checkBudgetsCapsForeignKey(newPrimaryKey)
+	message, err := s.validateBudgetsCapsForeignKey(newPrimaryKey, false, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -113,11 +120,12 @@ func (s *APIServer) UpdateBudgetCap(w http.ResponseWriter, r *http.Request, body
 	}
 
 	newPrimaryKey := &PrimaryKeyID{
+		BudgetCapsID:  id,
 		BudgetsID:     reqBody.BudgetsID,
 		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	message, err := s.checkBudgetsCapsForeignKey(newPrimaryKey)
+	message, err := s.validateBudgetsCapsForeignKey(newPrimaryKey, true, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -126,9 +134,9 @@ func (s *APIServer) UpdateBudgetCap(w http.ResponseWriter, r *http.Request, body
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-	if updatedBudgetCap == nil {
-		return respondWithError(requestLog, "data budget cap not found", err)
-	}
+	// if updatedBudgetCap == nil {
+	// 	return respondWithError(requestLog, "data budget cap not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, updatedBudgetCap)
 
@@ -141,13 +149,22 @@ func (s *APIServer) DeleteBudgetCap(w http.ResponseWriter, r *http.Request, body
 		return respondWithError(requestLog, "invalid ID", err)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetCapsID: id,
+	}
+
+	message, err := s.validateBudgetsCapsForeignKey(newPrimaryKey, true, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	deletedBudgetCap, err := s.Storage.BudgetCapsStorage.Delete(id)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-	if deletedBudgetCap == nil {
-		return respondWithError(requestLog, "data budget cap not found", err)
-	}
+	// if deletedBudgetCap == nil {
+	// 	return respondWithError(requestLog, "data budget cap not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, deletedBudgetCap)
 

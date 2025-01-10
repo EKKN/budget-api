@@ -22,21 +22,41 @@ func validateFundRequestsRequest(reqBody *FundRequests) error {
 	return nil
 }
 
-func (s *APIServer) checkFundRequestsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+// newPrimaryKey := &PrimaryKeyID{
+// 	FundRequestDetailsID: id,
+// 	ActivitiesID:         reqBody.ActivitiesID,
+// 	FundRequestsID:       reqBody.FundRequestsID,
+// 	BudgetDetailsID:      reqBody.BudgetDetailsID,
+// }
 
-	newPrimaryKey := &PrimaryKeyID{
-		BudgetPostsID: primaryKey.BudgetPostsID,
+// message, err := s.validateFundRequestDetailsForeignKey(newPrimaryKey, true)
+//
+//	if err != nil {
+//		return respondWithError(requestLog, message, err)
+//	}
+
+func (s *APIServer) validateFundRequestsForeignKey(primaryKey *PrimaryKeyID, validateSelfID bool, checkSelfOnly bool) (string, error) {
+
+	newKey := &PrimaryKeyID{
+		FundRequestsID: primaryKey.FundRequestsID,
+		BudgetPostsID:  primaryKey.BudgetPostsID,
 	}
 
-	primaryKeyID, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	storedKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newKey)
 	if err != nil {
-		return "error DB", err
+		return "database error", err
 	}
 
-	if primaryKeyID.BudgetPostsID == 0 {
-		return "data activities not found", fmt.Errorf("data budgetposts not found")
-
+	if validateSelfID && storedKey.FundRequestsID == 0 {
+		return "fund requests not found", fmt.Errorf("fund requests not found")
 	}
+	if !checkSelfOnly {
+
+		if storedKey.BudgetPostsID == 0 {
+			return "data budget post not found", fmt.Errorf("data budget post not found")
+		}
+	}
+
 	return "ok", nil
 }
 
@@ -80,7 +100,7 @@ func (s *APIServer) CreateFundRequest(w http.ResponseWriter, r *http.Request, bo
 		BudgetPostsID: reqBody.BudgetPostsID,
 	}
 
-	message, err := s.checkFundRequestsForeignKey(newPrimaryKey)
+	message, err := s.validateFundRequestsForeignKey(newPrimaryKey, false, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -111,10 +131,11 @@ func (s *APIServer) UpdateFundRequest(w http.ResponseWriter, r *http.Request, bo
 	}
 
 	newPrimaryKey := &PrimaryKeyID{
-		BudgetPostsID: reqBody.BudgetPostsID,
+		FundRequestsID: id,
+		BudgetPostsID:  reqBody.BudgetPostsID,
 	}
 
-	message, err := s.checkFundRequestsForeignKey(newPrimaryKey)
+	message, err := s.validateFundRequestsForeignKey(newPrimaryKey, true, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -124,9 +145,9 @@ func (s *APIServer) UpdateFundRequest(w http.ResponseWriter, r *http.Request, bo
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if updatedFundRequest == nil {
-		return respondWithError(requestLog, "data fund request not found", err)
-	}
+	// if updatedFundRequest == nil {
+	// 	return respondWithError(requestLog, "data fund request not found", err)
+	// }
 	return respondWithSuccess(requestLog, updatedFundRequest)
 
 }
@@ -138,13 +159,22 @@ func (s *APIServer) DeleteFundRequest(w http.ResponseWriter, r *http.Request, bo
 		return respondWithError(requestLog, "invalid ID", err)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		FundRequestsID: id,
+	}
+
+	message, err := s.validateFundRequestsForeignKey(newPrimaryKey, true, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	deletedFundRequest, err := s.Storage.FundRequestsStorage.Delete(id)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-	if deletedFundRequest == nil {
-		return respondWithError(requestLog, "data fund request not found", err)
-	}
+	// if deletedFundRequest == nil {
+	// 	return respondWithError(requestLog, "data fund request not found", err)
+	// }
 	return respondWithSuccess(requestLog, deletedFundRequest)
 
 }

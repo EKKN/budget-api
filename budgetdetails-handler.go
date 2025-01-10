@@ -28,24 +28,31 @@ func validateBudgetDetailsRequest(reqBody *BudgetDetails) error {
 	return nil
 }
 
-func (s *APIServer) checkBudgetsDetailsForeignKey(primaryKey *PrimaryKeyID) (string, error) {
+func (s *APIServer) validateBudgetDetailsForeignKey(primaryKey *PrimaryKeyID, validateSelfID bool, checkSelfOnly bool) (string, error) {
 
-	newPrimaryKey := &PrimaryKeyID{
-		BudgetsID:    primaryKey.BudgetsID,
-		ActivitiesID: primaryKey.ActivitiesID,
+	newKey := &PrimaryKeyID{
+		BudgetDetailsID: primaryKey.BudgetDetailsID,
+		BudgetsID:       primaryKey.BudgetsID,
+		ActivitiesID:    primaryKey.ActivitiesID,
 	}
 
-	primaryKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newPrimaryKey)
+	storedKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newKey)
 	if err != nil {
-		return "error DB", err
+		return "database error", err
 	}
 
-	if primaryKey.ActivitiesID == 0 {
-		return "data activities not found", fmt.Errorf("data activities not found")
+	if validateSelfID && storedKey.BudgetDetailsID == 0 {
+		return "budget details not found", fmt.Errorf("budget details not found")
 	}
 
-	if primaryKey.BudgetsID == 0 {
-		return "data budgets not found", fmt.Errorf("data budgets not found")
+	if !checkSelfOnly {
+		if storedKey.ActivitiesID == 0 {
+			return "activities not found", fmt.Errorf("activities not found")
+		}
+
+		if storedKey.BudgetsID == 0 {
+			return "budgets not found", fmt.Errorf("budgets not found")
+		}
 	}
 	return "ok", nil
 }
@@ -90,7 +97,7 @@ func (s *APIServer) CreateBudgetDetail(w http.ResponseWriter, r *http.Request, b
 		BudgetsID:    reqBody.BudgetsID,
 		ActivitiesID: reqBody.ActivitiesID,
 	}
-	message, err := s.checkBudgetsDetailsForeignKey(newPrimaryKey)
+	message, err := s.validateBudgetDetailsForeignKey(newPrimaryKey, false, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -121,11 +128,12 @@ func (s *APIServer) UpdateBudgetDetail(w http.ResponseWriter, r *http.Request, b
 	}
 
 	newPrimaryKey := &PrimaryKeyID{
-		BudgetsID:    reqBody.BudgetsID,
-		ActivitiesID: reqBody.ActivitiesID,
+		BudgetDetailsID: id,
+		BudgetsID:       reqBody.BudgetsID,
+		ActivitiesID:    reqBody.ActivitiesID,
 	}
 
-	message, err := s.checkBudgetsDetailsForeignKey(newPrimaryKey)
+	message, err := s.validateBudgetDetailsForeignKey(newPrimaryKey, true, false)
 	if err != nil {
 		return respondWithError(requestLog, message, err)
 	}
@@ -135,9 +143,9 @@ func (s *APIServer) UpdateBudgetDetail(w http.ResponseWriter, r *http.Request, b
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if updatedBudgetDetail == nil {
-		return respondWithError(requestLog, "data budget details not found", err)
-	}
+	// if updatedBudgetDetail == nil {
+	// 	return respondWithError(requestLog, "data budget details not found", err)
+	// }
 	return respondWithSuccess(requestLog, updatedBudgetDetail)
 
 }
@@ -149,13 +157,22 @@ func (s *APIServer) DeleteBudgetDetail(w http.ResponseWriter, r *http.Request, b
 		return respondWithError(requestLog, "invalid ID", err)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetDetailsID: id,
+	}
+
+	message, err := s.validateBudgetDetailsForeignKey(newPrimaryKey, true, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	deletedBudgetDetail, err := s.Storage.BudgetDetailsStorage.Delete(id)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
-	if deletedBudgetDetail == nil {
-		return respondWithError(requestLog, "data budget details not found", err)
-	}
+	// if deletedBudgetDetail == nil {
+	// 	return respondWithError(requestLog, "data budget details not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, deletedBudgetDetail)
 

@@ -18,6 +18,24 @@ func validateBudgetPostsRequest(reqBody *BudgetPosts) error {
 	return nil
 }
 
+func (s *APIServer) validateBudgetPostsForeignKey(primaryKey *PrimaryKeyID, validateSelfID bool) (string, error) {
+
+	newKey := &PrimaryKeyID{
+		BudgetPostsID: primaryKey.BudgetPostsID,
+	}
+
+	storedKey, err := s.Storage.PrimaryKeyIDStorage.GetPrimaryKey(newKey)
+	if err != nil {
+		return "database error", err
+	}
+
+	if validateSelfID && storedKey.BudgetPostsID == 0 {
+		return "budget posts not found", fmt.Errorf("budget posts not found")
+	}
+
+	return "ok", nil
+}
+
 func (s *APIServer) GetAllBudgetPosts(w http.ResponseWriter, r *http.Request, bodyBytes []byte, requestLog map[string]interface{}) (interface{}, error) {
 
 	budgetPosts, err := s.Storage.BudgetPostsStorage.GetAll()
@@ -88,6 +106,15 @@ func (s *APIServer) UpdateBudgetPost(w http.ResponseWriter, r *http.Request, bod
 		return respondWithError(requestLog, err.Error(), nil)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: id,
+	}
+
+	message, err := s.validateBudgetPostsForeignKey(newPrimaryKey, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	budgetPostByName, err := s.Storage.BudgetPostsStorage.GetByName(reqBody.Name)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
@@ -102,9 +129,9 @@ func (s *APIServer) UpdateBudgetPost(w http.ResponseWriter, r *http.Request, bod
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if updatedBudgetPost == nil {
-		return respondWithError(requestLog, "data budget posts not found", err)
-	}
+	// if updatedBudgetPost == nil {
+	// 	return respondWithError(requestLog, "data budget posts not found", err)
+	// }
 	return respondWithSuccess(requestLog, updatedBudgetPost)
 
 }
@@ -116,14 +143,23 @@ func (s *APIServer) DeleteBudgetPost(w http.ResponseWriter, r *http.Request, bod
 		return respondWithError(requestLog, "invalid ID", err)
 	}
 
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: id,
+	}
+
+	message, err := s.validateBudgetPostsForeignKey(newPrimaryKey, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
+	}
+
 	deletedBudgetPost, err := s.Storage.BudgetPostsStorage.Delete(id)
 	if err != nil {
 		return respondWithError(requestLog, "database error", err)
 	}
 
-	if deletedBudgetPost == nil {
-		return respondWithError(requestLog, "data budget posts not found", err)
-	}
+	// if deletedBudgetPost == nil {
+	// 	return respondWithError(requestLog, "data budget posts not found", err)
+	// }
 
 	return respondWithSuccess(requestLog, deletedBudgetPost)
 
@@ -139,6 +175,15 @@ func (s *APIServer) UpdateBudgetPostActiveByID(w http.ResponseWriter, r *http.Re
 	reqBody := &BudgetPosts{}
 	if err := json.NewDecoder(bytes.NewBuffer(bodyBytes)).Decode(reqBody); err != nil {
 		return respondWithError(requestLog, "invalid data request", err)
+	}
+
+	newPrimaryKey := &PrimaryKeyID{
+		BudgetPostsID: id,
+	}
+
+	message, err := s.validateBudgetPostsForeignKey(newPrimaryKey, true)
+	if err != nil {
+		return respondWithError(requestLog, message, err)
 	}
 
 	updatedBudgetPost, err := s.Storage.BudgetPostsStorage.UpdateActive(id, reqBody)
